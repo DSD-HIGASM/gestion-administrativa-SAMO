@@ -35,6 +35,10 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/config/usuarios', [UsuariosController::class, 'index'])
             ->name('config.usuarios');
 
+        Route::get('/configuracion/ingesta', function () {
+            return view('config.ingesta');
+        })->name('config.ingesta');
+
     });
 
     // Aquí agregaremos luego las rutas para Servicios, Nomencladores y Excel...

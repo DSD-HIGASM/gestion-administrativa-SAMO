@@ -18,7 +18,7 @@
                     <p class="font-sans text-xs text-gray-500 leading-snug">Altas, bajas, roles y permisos.</p>
                 </a>
 
-                <a href="#" class="flex flex-col p-5 bg-white border border-gray-200 rounded-2xl shadow-sm hover:shadow-md hover:border-pba-cyan/60 hover:-translate-y-1 transition-all duration-200 group text-center cursor-pointer">
+                <a href="{{ route('config.ingesta') }}" class="flex flex-col p-5 bg-white border border-gray-200 rounded-2xl shadow-sm hover:shadow-md hover:border-pba-cyan/60 hover:-translate-y-1 transition-all duration-200 group text-center cursor-pointer">
                     <div class="w-12 h-12 mx-auto mb-4 rounded-xl bg-pba-cyan/10 flex items-center justify-center text-pba-cyan group-hover:bg-pba-cyan group-hover:text-white transition-colors">
                         <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
                     </div>
