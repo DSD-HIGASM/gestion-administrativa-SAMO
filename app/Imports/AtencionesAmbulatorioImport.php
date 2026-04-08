@@ -3,9 +3,10 @@
 namespace App\Imports;
 
 use App\Models\AtencionAmbulatorio;
-use App\Models\HsiEspecialidad;
 use App\Models\ArchivoImportado;
-use App\Models\Paciente; // [Inferencia] Requerido para enlazar el paciente
+use App\Models\Paciente;
+use App\Models\SamoTramite;
+use App\Models\SamoEstado;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 use Carbon\Carbon;
@@ -16,12 +17,16 @@ use Maatwebsite\Excel\Concerns\WithChunkReading;
 class AtencionesAmbulatorioImport implements ToCollection, WithHeadingRow, WithChunkReading
 {
     private $archivoImportado;
-    private $especialidadesCacheadas = [];
-    private $pacientesCacheados = []; // Para no hacer cientos de queries de pacientes
+    private $pacientesCacheados = [];
+    private $estadoInicialUlid;
 
     public function __construct(ArchivoImportado $archivoImportado)
     {
         $this->archivoImportado = $archivoImportado;
+
+        // Buscamos el estado inicial una sola vez al instanciar la clase
+        $estadoInicial = SamoEstado::where('es_estado_inicial', true)->first();
+        $this->estadoInicialUlid = $estadoInicial ? $estadoInicial->ulid : null;
     }
 
     public function headingRow(): int
@@ -43,71 +48,75 @@ class AtencionesAmbulatorioImport implements ToCollection, WithHeadingRow, WithC
                 continue;
             }
 
-            // --- 1. Normalización de Fecha ---
+            // Normalización de Fechas
+            $fechaAtencion = null;
+            $fechaNacimiento = null;
             try {
-                $fechaAtencion = Carbon::createFromFormat('d/m/Y', $fechaAtencionCruda)->format('Y-m-d');
-            } catch (\Exception $e) {
-                // Si la fecha viene rota en el Excel, la dejamos nula para que la base de datos no arroje error
-                $fechaAtencion = null;
-            }
+                if (!empty($fechaAtencionCruda)) $fechaAtencion = Carbon::createFromFormat('d/m/Y', $fechaAtencionCruda)->format('Y-m-d');
+                if (!empty($row['fecha_de_nacimiento'])) $fechaNacimiento = Carbon::createFromFormat('d/m/Y', trim($row['fecha_de_nacimiento']))->format('Y-m-d');
+            } catch (\Exception $e) {}
 
-            // --- 2. Normalización de Paciente ---
+            $apellido = trim($row['apellidos_paciente'] ?? '');
+            $nombre = trim($row['nombres_paciente'] ?? '');
+
+            // Forzamos nulos en campos numéricos vacíos
+            $telefono = trim($row['telefono'] ?? '') === '' ? null : trim($row['telefono']);
+
+            // 1. Actualizar/Crear Paciente Central
             if (!isset($this->pacientesCacheados[$dni])) {
-
-                // Concatenamos el apellido y el nombre
-                $apellido = trim($row['apellidos_paciente'] ?? '');
-                $nombre = trim($row['nombres_paciente'] ?? '');
-                $nombreCompleto = trim($apellido . ', ' . $nombre, ', '); // Quita comas extra si falta uno
-
-                // [No verificado] Mapeamos las cabeceras exactas que vimos en tu CSV
-                $paciente = Paciente::firstOrCreate(
-                    ['documento' => $dni], // Busca por DNI
+                $paciente = Paciente::updateOrCreate(
+                    ['documento' => $dni],
                     [
-                        'ulid' => strtolower((string) Str::ulid()),
+                        'apellidos' => $apellido ?: 'Sin Especificar',
+                        'nombres' => $nombre ?: 'Sin Especificar',
                         'tipo_documento' => trim($row['tipo_documento'] ?? 'DNI'),
-                        'nombre_completo' => $nombreCompleto ?: 'Sin Especificar',
-                        'fecha_nacimiento' => trim($row['fecha_de_nacimiento'] ?? null),
-                        'genero_autopercibido' => trim($row['genero_autopercibido'] ?? null),
-                        'telefono' => trim($row['telefono'] ?? null),
+                        'fecha_nacimiento' => $fechaNacimiento,
+                        'telefono' => $telefono,
                     ]
                 );
                 $this->pacientesCacheados[$dni] = $paciente->ulid;
             }
             $pacienteUlid = $this->pacientesCacheados[$dni];
 
-            // --- 3. Normalización de Especialidad ---
-            $nombreServicioCrud = trim($row['especialidad'] ?? 'Sin Especificar');
-
-            if (!isset($this->especialidadesCacheadas[$nombreServicioCrud])) {
-                $especialidad = HsiEspecialidad::firstOrCreate(
-                    ['nombre_crudo_hsi' => $nombreServicioCrud],
-                    ['ulid' => strtolower((string) Str::ulid())]
-                );
-                $this->especialidadesCacheadas[$nombreServicioCrud] = $especialidad->ulid;
-            }
-            $especialidadUlid = $this->especialidadesCacheadas[$nombreServicioCrud];
-
-            // --- 4. Inserción de la Atención ---
-            $hashString = $dni . '|' . $fechaAtencionCruda . '|' . $nombreServicioCrud;
+            // 2. Hash
+            $hashString = $dni . '|' . $fechaAtencionCruda . '|' . trim($row['especialidad'] ?? '');
             $hashAtencion = hash('sha256', $hashString);
 
-            // Guardamos usando la estructura exacta de tu migración
-            AtencionAmbulatorio::updateOrCreate(
+            // 3. Guardar Atención Ambulatorio
+            $atencion = AtencionAmbulatorio::updateOrCreate(
                 ['hash_atencion' => $hashAtencion],
                 [
                     'paciente_ulid' => $pacienteUlid,
-                    'archivo_ulid' => $this->archivoImportado->ulid, // Enlazamos la atención con el Excel subido
-                    'hsi_especialidad_ulid' => $especialidadUlid,
+                    'archivo_ulid' => $this->archivoImportado->ulid,
+                    'apellidos' => $apellido,
+                    'nombres' => $nombre,
+                    'tipo_documento' => trim($row['tipo_documento'] ?? 'DNI'),
+                    'numero_documento' => $dni,
+                    'fecha_nacimiento' => $fechaNacimiento,
+                    'telefono' => $telefono,
+                    'obra_social' => trim($row['obra_socialprepaga'] ?? null),
+                    'numero_afiliado' => trim($row['nro_de_afiliado'] ?? null),
                     'fecha_atencion' => $fechaAtencion,
-                    'profesional' => $row['profesional'] ?? null,
-
-                    // [Inferencia] Maatwebsite suele quitar barras y espacios en las cabeceras.
-                    'obra_social_paciente' => $row['obra_socialprepaga'] ?? null,
-                    'numero_afiliado' => $row['nro_de_afiliado'] ?? null,
-                    'problemas_salud_diagnostico' => $row['problemas_de_salud_diagnostico'] ?? null,
-                    'practicas_estudios' => $row['practicasestudios'] ?? null,
+                    'especialidad' => trim($row['especialidad'] ?? 'Sin Especificar'),
+                    'profesional' => trim($row['profesional'] ?? ''),
+                    'problema' => trim($row['problemas_de_salud_diagnostico'] ?? null),
+                    'practicas_estudios' => trim($row['practicasestudios'] ?? null),
+                    'procedimientos' => trim($row['procedimientos'] ?? null),
                 ]
             );
+
+            // 4. Generar el Expediente de Facturación SAMO
+            if ($this->estadoInicialUlid) {
+                SamoTramite::firstOrCreate(
+                    ['atencion_ambulatorio_ulid' => $atencion->ulid],
+                    [
+                        'paciente_ulid' => $pacienteUlid,
+                        'estado_ulid' => $this->estadoInicialUlid,
+                        'obra_social_facturada' => trim($row['obra_socialprepaga'] ?? null),
+                        'numero_afiliado_facturado' => trim($row['nro_de_afiliado'] ?? null),
+                    ]
+                );
+            }
         }
 
         $this->archivoImportado->increment('total_filas_procesadas', $rows->count());

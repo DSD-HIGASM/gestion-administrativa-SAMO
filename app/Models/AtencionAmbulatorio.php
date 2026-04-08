@@ -14,24 +14,30 @@ class AtencionAmbulatorio extends Model
     protected $primaryKey = 'ulid';
 
     protected $fillable = [
+        'ulid',
         'paciente_ulid',
         'archivo_ulid',
-        'hsi_especialidad_ulid',
-        'nomenclador_ulid',
         'hash_atencion',
-        'fecha_atencion',
-        'profesional',
-        'obra_social_paciente',
+        'apellidos',
+        'nombres',
+        'tipo_documento',
+        'numero_documento',
+        'fecha_nacimiento',
+        'telefono',
+        'obra_social',
         'numero_afiliado',
-        'problemas_salud_diagnostico',
+        'fecha_atencion',
+        'especialidad',
+        'profesional',
+        'problema',
         'practicas_estudios',
-        'codigo_cie10_asignado',
-        'estado_samo',
+        'procedimientos'
     ];
 
     protected function casts(): array
     {
         return [
+            'fecha_nacimiento' => 'date',
             'fecha_atencion' => 'date',
         ];
     }

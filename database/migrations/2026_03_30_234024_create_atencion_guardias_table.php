@@ -24,7 +24,7 @@ return new class extends Migration
             $table->string('numero_documento')->nullable();
             $table->date('fecha_nacimiento')->nullable();
             $table->enum('sexo', ['Masculino','Femenino','X'])->nullable();
-            $table->integer('telefono')->nullable();
+            $table->string('telefono')->nullable();
             $table->text('obra_social')->nullable();
             $table->string('numero_afiliado')->nullable();
 

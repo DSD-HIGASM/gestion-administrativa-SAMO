@@ -1,7 +1,9 @@
 <?php
 
+use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\Config\UsuariosController;
 use Illuminate\Support\Facades\Route;
+use Livewire\Volt\Volt;
 
 /*
 |--------------------------------------------------------------------------
@@ -38,6 +40,22 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/configuracion/ingesta', function () {
             return view('config.ingesta');
         })->name('config.ingesta');
+
+    });
+
+    Route::middleware(['auth', 'verified'])->prefix('samo')->name('samo.')->group(function () {
+
+        // Bandeja y Expediente de Guardia
+        Route::middleware(['permission:ver-gestion-guardia|facturar-guardia|dev'])->group(function () {
+            Volt::route('/guardia', 'samo.bandeja-guardia')->name('guardia.inbox');
+            Volt::route('/guardia/expediente/{tramite:ulid}', 'samo.expediente-guardia')->name('guardia.expediente');
+        });
+
+        // Bandeja y Expediente de Ambulatorio
+        Route::middleware(['permission:ver-gestion-ambulatorio|facturar-ambulatorio-baja|facturar-ambulatorio-alta|dev'])->group(function () {
+            Volt::route('/ambulatorio', 'samo.bandeja-ambulatorio')->name('ambulatorio.inbox');
+            Volt::route('/ambulatorio/expediente/{tramite:ulid}', 'samo.expediente-ambulatorio')->name('ambulatorio.expediente');
+        });
 
     });
 

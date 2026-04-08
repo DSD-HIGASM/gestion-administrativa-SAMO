@@ -10,18 +10,43 @@ class AtencionGuardia extends Model
 {
     use HasFactory, HasUlids;
 
-    // 1. Forzar el nombre de la tabla
     protected $table = 'atenciones_guardia';
-
-    // 2. Definir la clave primaria
     protected $primaryKey = 'ulid';
 
-    // 3. Habilitar la asignación masiva
     protected $fillable = [
         'ulid',
-        'id_episodio_hsi',
-        'hsi_especialidad_ulid',
-        'fecha_atencion',
-        // [Inferencia] Agrega aquí cualquier otra columna que tengas en tu migración
+        'paciente_ulid',
+        'archivo_ulid',
+        'id_paciente_hsi',
+        'apellidos',
+        'nombres',
+        'tipo_documento',
+        'numero_documento',
+        'fecha_nacimiento',
+        'sexo',
+        'telefono',
+        'obra_social',
+        'numero_afiliado',
+        'id_episodio',
+        'fecha_hora_apertura',
+        'cantidad_triage',
+        'servicio',
+        'fecha_hora_atencion',
+        'diagnostico',
+        'fecha_hora_alta',
+        'practicas_procedimientos',
+        'profesional',
+        'profesional_alta',
+        'tipo_egreso'
     ];
+
+    protected function casts(): array
+    {
+        return [
+            'fecha_nacimiento' => 'date',
+            'fecha_hora_apertura' => 'datetime',
+            'fecha_hora_atencion' => 'datetime',
+            'fecha_hora_alta' => 'datetime',
+        ];
+    }
 }

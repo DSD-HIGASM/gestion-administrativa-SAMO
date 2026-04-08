@@ -19,6 +19,7 @@ class DatabaseSeeder extends Seeder
     {
 
         $this->call(RolesAndPermissionsSeeder::class);
+        $this->call(SamoEstadoSeeder::class);
 
         $admin = User::factory()->create([
             'name' => 'Cristian Jonathan',

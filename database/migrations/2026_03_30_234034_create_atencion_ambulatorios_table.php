@@ -21,7 +21,7 @@ return new class extends Migration
             $table->enum('tipo_documento', ['DNI','CI','LC','LE','Cédula Mercosur','CUIT','CUIL','Pasaporte extranjero','Cédula de identidad extranjera','Otro documento extranjero','No posee','En trámite'])->default('DNI');
             $table->string('numero_documento')->nullable();
             $table->date('fecha_nacimiento')->nullable();
-            $table->integer('telefono')->nullable();
+            $table->string('telefono')->nullable();
             $table->text('obra_social')->nullable();
             $table->string('numero_afiliado')->nullable();
             $table->date('fecha_atencion');

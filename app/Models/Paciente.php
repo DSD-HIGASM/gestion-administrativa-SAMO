@@ -15,11 +15,22 @@ class Paciente extends Model
 
     protected $fillable = [
         'ulid',
+        'apellidos',
+        'nombres',
         'tipo_documento',
         'documento',
-        'nombre_completo',
         'fecha_nacimiento',
-        'genero_autopercibido',
         'telefono',
+        'obras_sociales',
+        'id_paciente_hsi',
+        'sexo',
     ];
+
+    protected function casts(): array
+    {
+        return [
+            'fecha_nacimiento' => 'date',
+            'obras_sociales' => 'array',
+        ];
+    }
 }
