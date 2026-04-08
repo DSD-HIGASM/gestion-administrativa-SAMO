@@ -16,20 +16,29 @@ return new class extends Migration
 
             $table->foreignUlid('paciente_ulid')->constrained('pacientes', 'ulid')->cascadeOnDelete();
             $table->foreignUlid('archivo_ulid')->nullable()->constrained('archivos_importados', 'ulid')->nullOnDelete();
-            $table->foreignUlid('hsi_especialidad_ulid')->nullable()->constrained('hsi_especialidades', 'ulid')->nullOnDelete();
-            $table->foreignUlid('nomenclador_ulid')->nullable()->constrained('nomencladores', 'ulid')->nullOnDelete();
 
-            $table->string('id_episodio_hsi')->unique();
-            $table->timestamp('fecha_apertura')->nullable();
-            $table->timestamp('fecha_atencion')->nullable();
-            $table->timestamp('fecha_alta_medica')->nullable();
+            $table->integer('id_paciente_hsi');
+            $table->string('apellidos');
+            $table->string('nombres');
+            $table->enum('tipo_documento', ['DNI','CI','LC','LE','Cédula Mercosur','CUIT','CUIL','Pasaporte extranjero','Cédula de identidad extranjera','Otro documento extranjero','No posee','En trámite'])->default('DNI');
+            $table->string('numero_documento')->nullable();
+            $table->date('fecha_nacimiento')->nullable();
+            $table->enum('sexo', ['Masculino','Femenino','X'])->nullable();
+            $table->integer('telefono')->nullable();
+            $table->text('obra_social')->nullable();
+            $table->string('numero_afiliado')->nullable();
 
-            $table->string('obra_social_episodio')->nullable();
-            $table->text('numero_afiliado')->nullable();
-
-            $table->text('diagnosticos')->nullable();
-            $table->string('codigo_cie10_asignado')->nullable();
-            $table->string('estado_samo')->default('pendiente');
+            $table->integer('id_episodio');
+            $table->datetime('fecha_hora_apertura')->nullable();
+            $table->integer('cantidad_triage')->nullable();
+            $table->string('servicio');
+            $table->datetime('fecha_hora_atencion')->nullable();
+            $table->text('diagnostico')->nullable();
+            $table->datetime('fecha_hora_alta')->nullable();
+            $table->text('practicas_procedimientos')->nullable();
+            $table->text('profesional')->nullable();
+            $table->text('profesional_alta')->nullable();
+            $table->string('tipo_egreso')->nullable();
 
             $table->timestamps();
         });

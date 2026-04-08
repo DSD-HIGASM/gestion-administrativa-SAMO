@@ -13,16 +13,15 @@ return new class extends Migration
     {
         Schema::create('pacientes', function (Blueprint $table) {
             $table->ulid('ulid')->primary();
-            $table->string('tipo_documento')->nullable();
-
-            $table->text('documento');
-            $table->text('nombre_completo');
-            $table->text('fecha_nacimiento')->nullable();
-
-            $table->string('genero_autopercibido')->nullable();
-            $table->text('telefono')->nullable();
-
-            $table->timestamps();
+            $table->string('apellidos');
+            $table->string('nombres');
+            $table->enum('tipo_documento', ['DNI','CI','LC','LE','Cédula Mercosur','CUIT','CUIL','Pasaporte extranjero','Cédula de identidad extranjera','Otro documento extranjero','No posee','En trámite'])->default('DNI');
+            $table->string('numero_documento')->nullable();
+            $table->date('fecha_nacimiento')->nullable();
+            $table->integer('telefono')->nullable();
+            $table->json('obras_sociales')->nullable();
+            $table->integer('id_paciente_hsi')->nullable();
+            $table->enum('sexo', ['Masculino','Femenino','X'])->nullable();
         });
     }
 

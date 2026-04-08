@@ -6,9 +6,6 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    /**
-     * Run the migrations.
-     */
     public function up(): void
     {
         Schema::create('atenciones_ambulatorio', function (Blueprint $table) {
@@ -16,31 +13,32 @@ return new class extends Migration
 
             $table->foreignUlid('paciente_ulid')->constrained('pacientes', 'ulid')->cascadeOnDelete();
             $table->foreignUlid('archivo_ulid')->nullable()->constrained('archivos_importados', 'ulid')->nullOnDelete();
-            $table->foreignUlid('hsi_especialidad_ulid')->nullable()->constrained('hsi_especialidades', 'ulid')->nullOnDelete();
-            $table->foreignUlid('nomenclador_ulid')->nullable()->constrained('nomencladores', 'ulid')->nullOnDelete();
 
             $table->string('hash_atencion')->unique();
-            $table->date('fecha_atencion')->nullable();
-            $table->string('profesional')->nullable();
 
-            $table->string('obra_social_paciente')->nullable();
-            $table->text('numero_afiliado')->nullable();
-
-            $table->text('problemas_salud_diagnostico')->nullable();
+            $table->string('apellidos');
+            $table->string('nombres');
+            $table->enum('tipo_documento', ['DNI','CI','LC','LE','Cédula Mercosur','CUIT','CUIL','Pasaporte extranjero','Cédula de identidad extranjera','Otro documento extranjero','No posee','En trámite'])->default('DNI');
+            $table->string('numero_documento')->nullable();
+            $table->date('fecha_nacimiento')->nullable();
+            $table->integer('telefono')->nullable();
+            $table->text('obra_social')->nullable();
+            $table->string('numero_afiliado')->nullable();
+            $table->date('fecha_atencion');
+            $table->string('especialidad');
+            $table->text('profesional');
+            $table->text('problema')->nullable();
             $table->text('practicas_estudios')->nullable();
+            $table->text('procedimientos')->nullable();
 
-            $table->string('codigo_cie10_asignado')->nullable();
-            $table->string('estado_samo')->default('pendiente');
+
 
             $table->timestamps();
         });
     }
 
-    /**
-     * Reverse the migrations.
-     */
     public function down(): void
     {
-        Schema::dropIfExists('atencion_ambulatorios');
+        Schema::dropIfExists('atenciones_ambulatorio');
     }
 };
