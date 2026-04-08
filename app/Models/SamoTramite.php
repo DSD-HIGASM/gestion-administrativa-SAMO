@@ -27,7 +27,38 @@ class SamoTramite extends Model
         ];
     }
 
-    // --- LA VÁLVULA DE SEGURIDAD (Generador de Código Visual Autónomo) ---
+    // ==========================================
+    // RELACIONES ELOQUENT
+    // ==========================================
+
+    public function paciente()
+    {
+        return $this->belongsTo(Paciente::class, 'paciente_ulid', 'ulid');
+    }
+
+    public function estado()
+    {
+        return $this->belongsTo(SamoEstado::class, 'estado_ulid', 'ulid');
+    }
+
+    public function usuarioAsignado()
+    {
+        return $this->belongsTo(User::class, 'asignado_a_usuario_ulid', 'ulid');
+    }
+
+    public function atencionGuardia()
+    {
+        return $this->belongsTo(AtencionGuardia::class, 'atencion_guardia_ulid', 'ulid');
+    }
+
+    public function atencionAmbulatorio()
+    {
+        return $this->belongsTo(AtencionAmbulatorio::class, 'atencion_ambulatorio_ulid', 'ulid');
+    }
+
+    // ==========================================
+    // LA VÁLVULA DE SEGURIDAD (Código Visual)
+    // ==========================================
     protected static function boot()
     {
         parent::boot();
@@ -41,7 +72,7 @@ class SamoTramite extends Model
 
     public static function generarCodigoVisualUnico()
     {
-        // 31 caracteres limpios (sin O, 0, I, 1, L) para evitar confusiones humanas
+        // 31 caracteres limpios (sin O, 0, I, 1, L)
         $caracteres = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
         $longitud = 6;
         $maxIntentos = 10;
@@ -53,7 +84,7 @@ class SamoTramite extends Model
                     return $codigo; // Código limpio encontrado
                 }
             }
-            $longitud++; // Si la base colapsó 10 veces seguidas, expandimos el universo
+            $longitud++; // Expandimos si la base colapsa
         }
     }
 }

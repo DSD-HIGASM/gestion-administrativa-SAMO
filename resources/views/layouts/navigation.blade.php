@@ -20,11 +20,11 @@
                         Inicio
                     </x-nav-link>
 
-                    <x-nav-link href="#" class="font-sans font-bold text-[12px] uppercase tracking-wider text-gray-500 hover:text-pba-blue hover:border-pba-cyan focus:text-pba-blue transition">
+                    <x-nav-link :href="route('samo.guardia.index')" class="font-sans font-bold text-[12px] uppercase tracking-wider text-gray-500 hover:text-pba-blue hover:border-pba-cyan focus:text-pba-blue transition">
                         Guardia
                     </x-nav-link>
 
-                    <x-nav-link href="#" class="font-sans font-bold text-[12px] uppercase tracking-wider text-gray-500 hover:text-pba-blue hover:border-pba-cyan focus:text-pba-blue transition">
+                    <x-nav-link :href="route('samo.ambulatorio.index')" class="font-sans font-bold text-[12px] uppercase tracking-wider text-gray-500 hover:text-pba-blue hover:border-pba-cyan focus:text-pba-blue transition">
                         Ambulatorio
                     </x-nav-link>
 

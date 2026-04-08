@@ -1,9 +1,9 @@
 <?php
 
-use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\Config\UsuariosController;
 use Illuminate\Support\Facades\Route;
-use Livewire\Volt\Volt;
+use App\Http\Controllers\Samo\GuardiaController;
+use App\Http\Controllers\Samo\AmbulatorioController;
 
 /*
 |--------------------------------------------------------------------------
@@ -45,21 +45,17 @@ Route::middleware(['auth'])->group(function () {
 
     Route::middleware(['auth', 'verified'])->prefix('samo')->name('samo.')->group(function () {
 
-        // Bandeja y Expediente de Guardia
+        // Bandeja de Guardia
         Route::middleware(['permission:ver-gestion-guardia|facturar-guardia|dev'])->group(function () {
-            Volt::route('/guardia', 'samo.bandeja-guardia')->name('guardia.inbox');
-            Volt::route('/guardia/expediente/{tramite:ulid}', 'samo.expediente-guardia')->name('guardia.expediente');
+            Route::get('/guardia', [GuardiaController::class, 'index'])->name('guardia.index'); // <-- Cambiado de inbox a index
         });
 
-        // Bandeja y Expediente de Ambulatorio
+        // Bandeja de Ambulatorio
         Route::middleware(['permission:ver-gestion-ambulatorio|facturar-ambulatorio-baja|facturar-ambulatorio-alta|dev'])->group(function () {
-            Volt::route('/ambulatorio', 'samo.bandeja-ambulatorio')->name('ambulatorio.inbox');
-            Volt::route('/ambulatorio/expediente/{tramite:ulid}', 'samo.expediente-ambulatorio')->name('ambulatorio.expediente');
+            Route::get('/ambulatorio', [AmbulatorioController::class, 'index'])->name('ambulatorio.index'); // <-- Cambiado de inbox a index
         });
 
     });
-
-    // Aquí agregaremos luego las rutas para Servicios, Nomencladores y Excel...
 });
 
 // Rutas de autenticación (Login / Logout)

@@ -6,13 +6,13 @@ export default defineConfig({
         laravel({
             input: ['resources/css/app.css', 'resources/js/app.js'],
             refresh: true,
-            valetTls: 'gestion-administrativa-samo.test'
+            valetTls: 'gestion-administrativa-Samo.test'
         }),
     ],
     server: {
-        host: 'gestion-administrativa-samo.test',
+        host: 'gestion-administrativa-Samo.test',
         hmr: {
-            host: 'gestion-administrativa-samo.test'
+            host: 'gestion-administrativa-Samo.test'
         }
     }
 });
