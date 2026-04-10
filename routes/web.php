@@ -47,7 +47,8 @@ Route::middleware(['auth'])->group(function () {
 
         // Bandeja de Guardia
         Route::middleware(['permission:ver-gestion-guardia|facturar-guardia|dev'])->group(function () {
-            Route::get('/guardia', [GuardiaController::class, 'index'])->name('guardia.index'); // <-- Cambiado de inbox a index
+            Route::get('/guardia', [GuardiaController::class, 'index'])->name('guardia.index');
+            Route::get('/guardia/expediente/{tramite:ulid}', [GuardiaController::class, 'expediente'])->name('guardia.expediente'); // <-- AGREGAR ESTA LÍNEA
         });
 
         // Bandeja de Ambulatorio
