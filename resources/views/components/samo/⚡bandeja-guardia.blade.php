@@ -40,11 +40,23 @@ new class extends Component {
     public function actualizarStats()
     {
         if (Auth::user()->hasAnyPermission(['ver-gestion-guardia', 'dev'])) {
-            $this->stats['sin_asignar'] = SamoTramite::whereNotNull('atencion_guardia_ulid')->whereNull('asignado_a_usuario_ulid')->count();
 
-            $carga = SamoTramite::whereNotNull('atencion_guardia_ulid')->whereNotNull('asignado_a_usuario_ulid')
+            // 1. Estadísticas de "Sin Asignar" excluyendo estados finales
+            $this->stats['sin_asignar'] = SamoTramite::whereNotNull('atencion_guardia_ulid')
+                ->whereNull('asignado_a_usuario_ulid')
+                ->whereHas('estado', function($q) {
+                    $q->where('es_estado_final', false);
+                })->count();
+
+            // 2. Estadísticas de "Carga de Usuarios" excluyendo estados finales
+            $carga = SamoTramite::whereNotNull('atencion_guardia_ulid')
+                ->whereNotNull('asignado_a_usuario_ulid')
+                ->whereHas('estado', function($q) {
+                    $q->where('es_estado_final', false);
+                })
                 ->selectRaw('asignado_a_usuario_ulid, count(*) as total')
-                ->groupBy('asignado_a_usuario_ulid')->get();
+                ->groupBy('asignado_a_usuario_ulid')
+                ->get();
 
             $this->stats['carga_usuarios'] = $carga->map(function($item) {
                 $user = collect($this->facturistas)->firstWhere('ulid', $item->asignado_a_usuario_ulid);
@@ -79,10 +91,12 @@ new class extends Component {
         $query = SamoTramite::with(['estado', 'paciente', 'atencionGuardia', 'usuarioAsignado'])
             ->whereNotNull('atencion_guardia_ulid');
 
+        // SEGURIDAD DE ROL
         if (!Auth::user()->hasAnyPermission(['ver-gestion-guardia', 'dev'])) {
             $query->where('asignado_a_usuario_ulid', Auth::id());
         }
 
+        // 1. FILTRO DE TEXTO (DNI, Código, Nombre)
         if (!empty($this->search)) {
             $query->where(function($q) {
                 $q->where('codigo_visual', 'like', '%' . $this->search . '%')
@@ -94,8 +108,16 @@ new class extends Component {
             });
         }
 
+        // 2. FILTRO DE ESTADOS Y LÓGICA DE "DESAPARICIÓN"
         if (!empty($this->filtroEstado)) {
+            // Si el usuario elige un estado específico en el selector, mostramos esos expedientes (sean finales o no).
             $query->where('estado_ulid', $this->filtroEstado);
+        } elseif (empty($this->search)) {
+            // COMPORTAMIENTO POR DEFECTO: Si la bandeja carga normal (sin búsquedas ni filtros),
+            // ocultamos automáticamente todos los expedientes que tengan un estado final.
+            $query->whereHas('estado', function($q) {
+                $q->where('es_estado_final', false);
+            });
         }
 
         return $query->orderBy('created_at', 'desc');
