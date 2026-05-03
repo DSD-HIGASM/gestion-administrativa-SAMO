@@ -1,73 +1,87 @@
-<div align="center">
-  <h1>🏥 Gestión Administrativa SAMO</h1>
-  <p><i>Optimizando los procesos administrativos del HIGA Gral. San Martín</i></p>
+# 🏥 Sistema de Gestión Administrativa SAMO (Beta 1)
 
-![PHP](https://img.shields.io/badge/PHP-8.2+-777BB4?style=for-the-badge&logo=php&logoColor=white)
-![Laravel](https://img.shields.io/badge/Laravel-13.x-FF2D20?style=for-the-badge&logo=laravel&logoColor=white)
-![MySQL](https://img.shields.io/badge/MySQL-Database-4479A1?style=for-the-badge&logo=mysql&logoColor=white)
-![License](https://img.shields.io/badge/Licencia-MIT-green?style=for-the-badge)
-</div>
+### Hospital Interzonal General de Agudos "Gral. San Martín" — La Plata
+**División de Salud Digital**
 
 ---
 
-## 🚀 Descripción
+## 📝 Descripción
+Este sistema ha sido diseñado para centralizar y optimizar la facturación de prestaciones médicas, permitiendo la transición fluida de datos desde la **Historia de Salud Integrada (HSI)** hacia los procesos administrativos de **SAMO**[cite: 1, 2].
 
-Sistema robusto desarrollado en **Laravel** para la gestión integral de la facturación y administración del **SAMO** (Sistema de Atención Médica Organizada).
+El objetivo principal de la **Beta 1** es la digitalización total del flujo de **Guardia**, eliminando el uso de papel y permitiendo una auditoría en tiempo real de cada expediente.
 
-El objetivo principal es centralizar, agilizar y transparentar el flujo de trabajo del departamento de facturación del hospital, permitiendo la ingesta de datos desde sistemas externos, la organización eficiente de las atenciones y un control de auditoría riguroso.
+---
 
 ## ✨ Características Principales
 
-- **📥 Importación de Atenciones:** Carga masiva y gestión eficiente de registros para pacientes de Ambulatorio y Guardia.
-- **🔄 Ingesta de Datos (HSI):** Módulo dedicado para la sincronización e integración transparente de datos hospitalarios.
-- **🛡️ Auditoría y Expedientes:** Panel de control detallado para auditar el estado de los trámites y documentos.
-- **📚 Gestión de Nomencladores:** Administración completa de prácticas, diagnósticos y sus exclusiones.
-- **🔐 Control de Acceso:** Sistema seguro de gestión de usuarios, roles y permisos.
+*   **⚡ Bandeja de Guardia Inteligente**: Recepción, búsqueda y asignación masiva de episodios importados de HSI.
+*   **📑 Expediente Digital Único**: Gestión integral de prácticas, diagnósticos (CIE-10) y documentación adjunta por cada atención.
+*   **💳 Padronización de Coberturas**: Sistema multiobrapuente que gestiona diversas coberturas por paciente con validación de vigencia automática.
+*   **⚙️ Reglas de Jefatura**: Panel de configuración para ocultar automáticamente servicios o profesionales no facturables (ej. Enfermería), manteniendo la bandeja de trabajo limpia.
+*   **📥 Ingesta de Datos HSI**: Motor de importación procesado en segundo plano para archivos Excel provenientes de sistemas externos.
+*   **🕵️ Auditoría "Caja Negra"**: Registro pormenorizado de cada acción, cambio de estado y usuario interviniente para trazabilidad total[cite: 2].
 
-> **Nota:** 🚧 *El sistema se encuentra en desarrollo activo. Próximamente se incorporarán nuevas funcionalidades operativas.*
+---
 
-## 🛠️ Requisitos del Sistema
+## 🛠️ Stack Tecnológico
 
-Asegurate de contar con el siguiente entorno para que el proyecto funcione a la perfección:
+*   **Framework:** [Laravel 11+](https://laravel.com/)[cite: 2]
+*   **Frontend:** [Livewire (Volt)](https://livewire.laravel.com/) & [Tailwind CSS](https://tailwindcss.com/)[cite: 2]
+*   **Base de Datos:** MySQL / MariaDB[cite: 2]
+*   **Permisos:** [Spatie Permission](https://spatie.be/docs/laravel-permission/v6/introduction)[cite: 2]
+*   **Excel:** [Laravel Excel (Maatwebsite)](https://docs.laravel-excel.com/)[cite: 2]
+*   **Bundler:** Vite[cite: 2]
 
-- **PHP** (Compatible con Laravel 13)
-- **Composer** (Gestor de dependencias de PHP)
-- **Node.js y NPM** (Para compilar los recursos del frontend)
-- **MySQL** (Motor de base de datos)
+---
 
-## ⚙️ Puesta en Marcha
-
-Seguí estos sencillos pasos para levantar el entorno de desarrollo local y empezar a trabajar:
+## 🚀 Instalación (Desarrollo)
 
 1. **Clonar el repositorio:**
    ```bash
-   git clone <url-del-repositorio>
+   git clone [URL-DEL-REPO]
    cd gestion-administrativa-SAMO
-   ```
-Instalar dependencias (Backend & Frontend):
+    ```
+2. **Instalar dependencias:**
+    ```bash
+    composer install
+    npm install
+    ```
 
-```Bash
-composer install
-npm install && npm run build
-```
-Configurar el Entorno:
-Duplicá el archivo de configuración de ejemplo y completá tus credenciales de MySQL (DB_DATABASE, DB_USERNAME, DB_PASSWORD).
+3. **Configurar el entorno:**
 
-```Bash
-cp .env.example .env
-```
-Generar la Key y Migrar:
-Estos comandos preparan la seguridad de tu app, crean las tablas en la base de datos y cargan la información inicial necesaria (como los roles y permisos).
+* Copia el archivo de ejemplo: cp .env.example .env.
 
-```Bash
-php artisan key:generate
+* Genera la key: php artisan key:generate.
+
+* Configura tus credenciales de DB en el .env.
+
+4. **Migraciones y Seeders:**
+
+```bash
 php artisan migrate --seed
 ```
-¡Iniciar el servidor!
+Esto cargará los estados iniciales, roles y el catálogo CIE-10.
 
-```Bash
+5. **Iniciar:**
+
+```bash
+npm run dev
 php artisan serve
 ```
 
-📄 Licencia
-Este proyecto está protegido bajo los términos de la licencia detallada en el archivo LICENSE incluido en la raíz del repositorio.
+🏗️ **Despliegue en Producción**
+
+Para garantizar la estabilidad en el entorno hospitalario, siga estos pasos:
+
+1. Compilar activos: ```npm run build```.
+
+2. Optimizar Laravel: ```php artisan optimize```.
+
+3. Enlace de Archivos: ```php artisan storage:link```.
+
+4. Colas (Queues): Configurar Supervisor para ejecutar ```php artisan queue:work```. Esto es indispensable para la importación de archivos HSI.
+
+👥 **Créditos**
+Desarrollado con compromiso por la División de Salud Digital del HIGA General San Martín.
+
+SAMO v1.0 Beta 1 | 2026
