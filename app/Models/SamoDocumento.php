@@ -24,8 +24,13 @@ class SamoDocumento extends Model
         'ruta_archivo',
         'extension',
         'peso_bytes',
-        'subido_por_usuario_ulid'
+        'subido_por_usuario_ulid',
+        'es_global'
     ];
+
+    protected function casts(): array {
+        return ['es_global' => 'boolean'];
+    }
 
     // Relaciones clave
     public function tramite()

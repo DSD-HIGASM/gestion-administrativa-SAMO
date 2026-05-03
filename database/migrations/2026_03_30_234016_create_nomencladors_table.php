@@ -6,25 +6,29 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    /**
-     * Run the migrations.
-     */
     public function up(): void
     {
-        Schema::create('nomencladores', function (Blueprint $table) {
+        Schema::create('nomencladors', function (Blueprint $table) {
             $table->ulid('ulid')->primary();
-            $table->string('cobertura');
-            $table->string('codigo_practica')->index();
+
+            $table->enum('origen', ['SAMO', 'PAMI', 'IOMA', 'CUSTOM'])->default('SAMO');
+            $table->string('codigo');
             $table->text('descripcion');
-            $table->decimal('valor_unitario', 15, 2);
-            $table->date('vigencia_desde')->nullable();
+
+            // Nullable porque PAMI o IOMA pueden no tener un valor fijo establecido
+            $table->decimal('valor', 10, 2)->nullable();
+
+            // Para "apagar" prácticas viejas sin borrar el historial
+            $table->boolean('activo')->default(true);
+
             $table->timestamps();
+            $table->softDeletes();
+
+            // Índice compuesto para búsquedas ultra rápidas
+            $table->index(['origen', 'codigo']);
         });
     }
 
-    /**
-     * Reverse the migrations.
-     */
     public function down(): void
     {
         Schema::dropIfExists('nomencladors');

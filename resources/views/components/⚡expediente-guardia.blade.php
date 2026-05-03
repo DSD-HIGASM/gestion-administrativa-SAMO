@@ -9,6 +9,8 @@ use App\Models\SamoDocumento;
 use App\Models\SamoEstado;
 use App\Models\SamoAuditoria;
 use App\Models\User;
+use App\Models\Nomenclador;
+use App\Models\Cie10;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
 
@@ -17,19 +19,31 @@ new class extends Component {
 
     public SamoTramite $tramite;
 
+    // Colecciones Principales
     public $practicas = [];
     public $diagnosticos = [];
-    public $documentos = [];
+    public $documentosTramite = [];
+    public $documentosPaciente = [];
     public $auditorias = [];
     public $estadosDisponibles = [];
     public $usuariosCache = [];
 
-    public $nuevaPractica = ['nomenclador_origen' => 'SAMO', 'codigo_practica' => '', 'descripcion_practica' => '', 'cantidad' => 1, 'valor_unitario' => 0];
-    public $nuevoDiagnostico = ['cie10_codigo' => '', 'tipo_diagnostico' => 'Principal'];
+    // Buscadores Predictivos
+    public $busquedaPractica = '';
+    public $resultadosPracticas = [];
+    public $busquedaCie10 = '';
+    public $resultadosCie10 = [];
 
+    // Formularios
+    public $nuevaPractica = ['nomenclador_origen' => 'SAMO', 'codigo_practica' => '', 'descripcion_practica' => '', 'cantidad' => 1, 'valor_unitario' => 0];
+    public $nuevoDiagnostico = ['cie10_codigo' => '', 'descripcion' => '', 'tipo_diagnostico' => 'Principal'];
+
+    // Archivos
     public $archivoNuevo;
     public $nombreArchivoCustom = '';
+    public $esDocumentoGlobal = false;
 
+    // Estado general
     public $estadoActualUlid;
     public $observaciones;
 
@@ -48,7 +62,10 @@ new class extends Component {
     {
         $this->practicas = SamoTramitePractica::where('samo_tramite_ulid', $this->tramite->ulid)->get();
         $this->diagnosticos = SamoTramiteDiagnostico::where('samo_tramite_ulid', $this->tramite->ulid)->get();
-        $this->documentos = SamoDocumento::where('samo_tramite_ulid', $this->tramite->ulid)->get();
+
+        $this->documentosTramite = SamoDocumento::where('samo_tramite_ulid', $this->tramite->ulid)->where('es_global', false)->get();
+        $this->documentosPaciente = SamoDocumento::where('paciente_ulid', $this->tramite->paciente_ulid)->where('es_global', true)->get();
+
         $this->auditorias = SamoAuditoria::where('samo_tramite_ulid', $this->tramite->ulid)->orderBy('created_at', 'desc')->get();
 
         $userIds = $this->auditorias->pluck('usuario_ulid')->unique()->filter();
@@ -80,6 +97,58 @@ new class extends Component {
         $this->registrarAuditoria('cierre_expediente_forzado', ['metodo' => 'Abandono de pestaña/navegador']);
     }
 
+    // --- BUSCADORES PREDICTIVOS ---
+    public function updatedBusquedaPractica()
+    {
+        if (strlen($this->busquedaPractica) >= 2) {
+            $this->resultadosPracticas = Nomenclador::where('origen', $this->nuevaPractica['nomenclador_origen'])
+                ->where('activo', true)
+                ->where(function($q) {
+                    $q->where('codigo', 'like', '%' . $this->busquedaPractica . '%')
+                        ->orWhere('descripcion', 'like', '%' . $this->busquedaPractica . '%');
+                })->take(15)->get();
+        } else {
+            $this->resultadosPracticas = [];
+        }
+    }
+
+    public function seleccionarPractica($ulid)
+    {
+        $practica = Nomenclador::find($ulid);
+        if ($practica) {
+            $this->nuevaPractica['codigo_practica'] = $practica->codigo;
+            $this->nuevaPractica['descripcion_practica'] = $practica->descripcion;
+            $this->nuevaPractica['valor_unitario'] = $practica->valor ?? 0;
+            $this->busquedaPractica = $practica->codigo . ' - ' . $practica->descripcion;
+            $this->resultadosPracticas = [];
+        }
+    }
+
+    public function updatedBusquedaCie10()
+    {
+        if (strlen($this->busquedaCie10) >= 2) {
+            $this->resultadosCie10 = Cie10::where('activo', true)
+                ->where(function($q) {
+                    $q->where('codigo', 'like', '%' . $this->busquedaCie10 . '%')
+                        ->orWhere('descripcion', 'like', '%' . $this->busquedaCie10 . '%');
+                })->take(15)->get();
+        } else {
+            $this->resultadosCie10 = [];
+        }
+    }
+
+    public function seleccionarCie10($ulid)
+    {
+        $cie10 = Cie10::find($ulid);
+        if ($cie10) {
+            $this->nuevoDiagnostico['cie10_codigo'] = $cie10->codigo;
+            $this->nuevoDiagnostico['descripcion'] = $cie10->descripcion;
+            $this->busquedaCie10 = $cie10->codigo . ' - ' . $cie10->descripcion;
+            $this->resultadosCie10 = [];
+        }
+    }
+
+    // --- ACCIONES DE EXPEDIENTE ---
     public function agregarPractica()
     {
         $this->validate([
@@ -107,7 +176,8 @@ new class extends Component {
             'monto_agregado' => $subtotal
         ]);
 
-        $this->nuevaPractica = ['nomenclador_origen' => 'SAMO', 'codigo_practica' => '', 'descripcion_practica' => '', 'cantidad' => 1, 'valor_unitario' => 0];
+        $this->nuevaPractica = ['nomenclador_origen' => $this->nuevaPractica['nomenclador_origen'], 'codigo_practica' => '', 'descripcion_practica' => '', 'cantidad' => 1, 'valor_unitario' => 0];
+        $this->busquedaPractica = '';
         $this->recalcularTotal();
     }
 
@@ -155,7 +225,8 @@ new class extends Component {
             'tipo' => $diag->tipo_diagnostico
         ]);
 
-        $this->nuevoDiagnostico = ['cie10_codigo' => '', 'tipo_diagnostico' => 'Principal'];
+        $this->nuevoDiagnostico = ['cie10_codigo' => '', 'descripcion' => '', 'tipo_diagnostico' => 'Principal'];
+        $this->busquedaCie10 = '';
         $this->cargarRelaciones();
     }
 
@@ -178,17 +249,28 @@ new class extends Component {
 
         $extension = $this->archivoNuevo->getClientOriginalExtension();
         $nombreFinal = \Illuminate\Support\Str::slug($this->nombreArchivoCustom) . '_' . time() . '.' . $extension;
-        $ruta = $this->archivoNuevo->storeAs('samo_documentos/' . $this->tramite->ulid, $nombreFinal, 'public');
+
+        // Separo en carpetas distintas
+        $carpeta = $this->esDocumentoGlobal
+            ? 'samo_documentos/paciente/' . $this->tramite->paciente_ulid
+            : 'samo_documentos/tramite/' . $this->tramite->ulid;
+
+        $ruta = $this->archivoNuevo->storeAs($carpeta, $nombreFinal, 'public');
 
         SamoDocumento::create([
             'samo_tramite_ulid' => $this->tramite->ulid,
             'paciente_ulid' => $this->tramite->paciente_ulid,
-            'nombre_original' => $this->nombreArchivoCustom, // Solo guardamos los campos que existen en la BD
+            'nombre_original' => $this->nombreArchivoCustom,
+            'es_global' => $this->esDocumentoGlobal,
             'ruta_archivo' => $ruta,
         ]);
 
-        $this->registrarAuditoria('sube_documento', ['nombre_archivo' => $this->nombreArchivoCustom, 'extension' => $extension]);
-        $this->reset(['archivoNuevo', 'nombreArchivoCustom']);
+        $this->registrarAuditoria('sube_documento', [
+            'nombre_archivo' => $this->nombreArchivoCustom,
+            'es_global' => $this->esDocumentoGlobal ? 'Si' : 'No'
+        ]);
+
+        $this->reset(['archivoNuevo', 'nombreArchivoCustom', 'esDocumentoGlobal']);
         $this->cargarRelaciones();
         session()->flash('doc_success', 'Documento adjuntado correctamente.');
     }
@@ -201,7 +283,7 @@ new class extends Component {
             $ext = pathinfo($doc->ruta_archivo, PATHINFO_EXTENSION);
             return Storage::disk('public')->download($doc->ruta_archivo, $doc->nombre_original . '.' . $ext);
         }
-        session()->flash('doc_error', 'El archivo no se encuentra en el servidor.');
+        session()->flash('doc_error', 'El archivo físico no se encuentra en el servidor.');
     }
 
     public function eliminarDocumento($ulid)
@@ -255,6 +337,7 @@ new class extends Component {
 
 <div x-data="{ tab: 'resumen' }" @beforeunload.window="$wire.registrarCierreAbandonado()">
 
+    <!-- BARRA SUPERIOR DE ACCIONES -->
     <div class="bg-white border border-gray-200 rounded-2xl shadow-sm p-4 mb-6 flex flex-col md:flex-row justify-between items-center gap-4">
         <div class="flex items-center gap-4 w-full md:w-auto">
             <select wire:model="estadoActualUlid" class="rounded-xl border-gray-200 bg-gray-50 font-bold text-sm text-gray-800 focus:ring-pba-cyan w-full md:w-64">
@@ -267,23 +350,30 @@ new class extends Component {
         </button>
     </div>
 
-    @if (session()->has('success')) <div x-data="{ show: true }" x-show="show" x-init="setTimeout(() => show = false, 3000)" class="mb-6 text-sm font-bold text-green-700 bg-green-50 border-l-4 border-green-500 p-4 rounded-r-xl shadow-sm">{{ session('success') }}</div> @endif
+    <!-- NOTIFICACIONES -->
+    @if (session()->has('success'))
+        <div x-data="{ show: true }" x-show="show" x-init="setTimeout(() => show = false, 3000)" class="mb-6 text-sm font-bold text-green-700 bg-green-50 border-l-4 border-green-500 p-4 rounded-r-xl shadow-sm">{{ session('success') }}</div>
+    @endif
 
+    <!-- MENU DE PESTAÑAS -->
     <div class="flex space-x-1 bg-gray-200/50 p-1 rounded-t-2xl overflow-x-auto">
         <button @click="tab = 'resumen'" :class="{ 'bg-white shadow-sm text-pba-blue font-extrabold': tab === 'resumen', 'text-gray-500 hover:text-gray-700 font-medium': tab !== 'resumen' }" class="px-6 py-3 rounded-t-xl text-sm transition-all whitespace-nowrap">Clínica y Facturación</button>
         <button @click="tab = 'paciente'" :class="{ 'bg-white shadow-sm text-pba-blue font-extrabold': tab === 'paciente', 'text-gray-500 hover:text-gray-700 font-medium': tab !== 'paciente' }" class="px-6 py-3 rounded-t-xl text-sm transition-all whitespace-nowrap flex items-center gap-2">Perfil Paciente</button>
         <button @click="tab = 'documentos'" :class="{ 'bg-white shadow-sm text-pba-blue font-extrabold': tab === 'documentos', 'text-gray-500 hover:text-gray-700 font-medium': tab !== 'documentos' }" class="px-6 py-3 rounded-t-xl text-sm transition-all whitespace-nowrap flex items-center gap-2">
-            Documentos @if(count($documentos) > 0) <span class="bg-pba-cyan text-white text-[10px] px-1.5 py-0.5 rounded-full">{{ count($documentos) }}</span> @endif
+            Documentos @if(count($documentosTramite) + count($documentosPaciente) > 0) <span class="bg-pba-cyan text-white text-[10px] px-1.5 py-0.5 rounded-full">{{ count($documentosTramite) + count($documentosPaciente) }}</span> @endif
         </button>
         @canany(['ver-gestion-guardia', 'dev'])
             <button @click="tab = 'auditoria'" :class="{ 'bg-white shadow-sm text-pba-blue font-extrabold': tab === 'auditoria', 'text-gray-500 hover:text-gray-700 font-medium': tab !== 'auditoria' }" class="px-6 py-3 rounded-t-xl text-sm transition-all whitespace-nowrap flex items-center gap-2">Auditoría Integral</button>
         @endcanany
     </div>
 
+    <!-- CONTENEDOR PRINCIPAL -->
     <div class="bg-white border border-gray-200 border-t-0 rounded-b-2xl shadow-sm p-6 min-h-[500px]">
 
+        <!-- PESTAÑA 1: CLINICA Y FACTURACION -->
         <div x-show="tab === 'resumen'" x-transition.opacity class="grid grid-cols-1 lg:grid-cols-2 gap-8">
             <div class="space-y-6">
+                <!-- Tarjeta Episodio de Guardia -->
                 <div class="bg-gray-50 p-5 rounded-2xl border border-gray-100">
                     <div class="flex items-center gap-3 mb-4 border-b border-gray-200 pb-3">
                         <div class="w-8 h-8 rounded-full bg-red-100 text-red-600 flex items-center justify-center"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"></path></svg></div>
@@ -301,29 +391,55 @@ new class extends Component {
                     </div>
                 </div>
 
+                <!-- Buscador Inteligente CIE-10 -->
                 <div>
                     <h3 class="font-sans font-bold text-gray-800 mb-3 border-b border-gray-100 pb-2">Codificación CIE-10</h3>
-                    <div class="flex flex-col sm:flex-row gap-2 mb-4">
-                        <input wire:model="nuevoDiagnostico.cie10_codigo" type="text" placeholder="Cód (Ej: J15)" class="w-full sm:w-1/2 rounded-xl border-gray-200 text-sm focus:ring-pba-cyan">
+                    <div class="flex flex-col sm:flex-row gap-2 mb-4 items-start">
+                        <div class="w-full sm:w-1/2 relative">
+                            <input wire:model.live.debounce.300ms="busquedaCie10" type="text" placeholder="Buscar CIE-10..." class="w-full rounded-xl border-gray-200 text-sm focus:ring-pba-cyan">
+                            @if(count($resultadosCie10) > 0)
+                                <ul class="absolute z-20 w-full mt-1 bg-white border border-gray-200 rounded-xl shadow-lg max-h-60 overflow-y-auto">
+                                    @foreach($resultadosCie10 as $c10)
+                                        <li wire:click="seleccionarCie10('{{ $c10->ulid }}')" class="px-4 py-2 hover:bg-pba-blue/10 cursor-pointer border-b border-gray-50 last:border-0 text-sm">
+                                            <span class="font-mono font-bold text-pba-blue">{{ $c10->codigo }}</span> <span class="text-gray-600">{{ $c10->descripcion }}</span>
+                                        </li>
+                                    @endforeach
+                                </ul>
+                            @endif
+                        </div>
                         <select wire:model="nuevoDiagnostico.tipo_diagnostico" class="w-full sm:w-1/3 rounded-xl border-gray-200 text-sm focus:ring-pba-cyan">
                             <option value="Principal">Principal</option><option value="Secundario">Secundario</option><option value="Presuntivo">Presuntivo</option>
                         </select>
-                        <button wire:click="agregarDiagnostico" class="px-4 py-2 bg-gray-800 text-white font-bold rounded-xl text-sm">Añadir</button>
+                        <button wire:click="agregarDiagnostico" class="px-4 py-2 bg-gray-800 hover:bg-black text-white font-bold rounded-xl text-sm transition-colors" {{ empty($nuevoDiagnostico['cie10_codigo']) ? 'disabled' : '' }}>Añadir</button>
                     </div>
                     <ul class="divide-y divide-gray-100 border border-gray-100 rounded-xl">
                         @forelse($diagnosticos as $diag)
-                            <li class="p-3 flex justify-between items-center hover:bg-gray-50">
-                                <div><span class="font-mono font-bold text-sm text-gray-800 mr-2">{{ $diag->cie10_codigo }}</span><span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase {{ $diag->tipo_diagnostico === 'Principal' ? 'bg-pba-blue/10 text-pba-blue' : 'bg-gray-100 text-gray-600' }}">{{ $diag->tipo_diagnostico }}</span></div>
-                                <button wire:click="eliminarDiagnostico('{{ $diag->ulid }}')" class="text-red-400 hover:text-red-600 font-bold text-[10px] uppercase">Borrar</button>
+                            <li class="p-3 flex justify-between items-center hover:bg-gray-50 transition-colors">
+                                <div class="flex items-center gap-2 overflow-hidden pr-4">
+                <span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase whitespace-nowrap {{ $diag->tipo_diagnostico === 'Principal' ? 'bg-pba-blue/10 text-pba-blue' : 'bg-gray-100 text-gray-600' }}">
+                    {{ $diag->tipo_diagnostico }}
+                </span>
+                                    <span class="font-mono font-bold text-sm text-gray-800 whitespace-nowrap">
+                    {{ $diag->cie10_codigo }}
+                </span>
+                                    <span class="font-sans text-sm text-gray-600 truncate">
+                    - {{ $diag->cie10_descripcion }}
+                </span>
+                                </div>
+                                <button wire:click="eliminarDiagnostico('{{ $diag->ulid }}')" class="text-red-400 hover:text-red-600 font-bold text-[10px] uppercase shrink-0 transition-colors">
+                                    Borrar
+                                </button>
                             </li>
                         @empty
-                            <li class="p-3 text-center text-xs text-gray-400 italic">Sin codificar.</li>
+                            <li class="p-4 text-center text-xs text-gray-400 italic">No hay diagnósticos cargados.</li>
                         @endforelse
                     </ul>
                 </div>
             </div>
 
+            <!-- Resumen Financiero y Prácticas -->
             <div class="space-y-6">
+                <!-- Tarjeta Total a Facturar -->
                 <div class="bg-gradient-to-br from-pba-blue to-pba-cyan rounded-2xl shadow-md p-6 text-white text-center relative overflow-hidden">
                     <div class="absolute inset-0 bg-white opacity-10" style="background-image: radial-gradient(#fff 1px, transparent 1px); background-size: 10px 10px;"></div>
                     <div class="relative z-10">
@@ -333,21 +449,37 @@ new class extends Component {
                     </div>
                 </div>
 
-                <div class="border border-gray-200 rounded-2xl shadow-sm overflow-hidden">
-                    <div class="px-4 py-3 bg-gray-50 border-b border-gray-100"><h3 class="font-sans font-bold text-gray-800 text-sm">Prácticas y Módulos SAMO</h3></div>
+                <!-- Buscador Inteligente Nomenclador -->
+                <div class="border border-gray-200 rounded-2xl shadow-sm overflow-visible">
+                    <div class="px-4 py-3 bg-gray-50 border-b border-gray-100 rounded-t-2xl"><h3 class="font-sans font-bold text-gray-800 text-sm">Prácticas y Módulos Facturables</h3></div>
                     <div class="p-4 bg-white border-b border-gray-100 space-y-3">
                         <div class="flex gap-2">
-                            <select wire:model="nuevaPractica.nomenclador_origen" class="w-1/3 rounded-lg border-gray-200 text-xs focus:ring-pba-cyan"><option value="SAMO">SAMO</option><option value="PAMI">PAMI</option><option value="IOMA">IOMA</option><option value="CUSTOM">OTRO</option></select>
-                            <input wire:model="nuevaPractica.codigo_practica" type="text" placeholder="Cód. Práctica" class="w-2/3 rounded-lg border-gray-200 text-xs focus:ring-pba-cyan">
+                            <select wire:model="nuevaPractica.nomenclador_origen" class="w-1/3 rounded-lg border-gray-200 text-xs focus:ring-pba-cyan">
+                                <option value="SAMO">SAMO</option><option value="PAMI">PAMI</option><option value="IOMA">IOMA</option><option value="CUSTOM">OTRO</option>
+                            </select>
+
+                            <div class="w-2/3 relative">
+                                <input wire:model.live.debounce.300ms="busquedaPractica" type="text" placeholder="Escribí código o nombre..." class="w-full rounded-lg border-gray-200 text-xs focus:ring-pba-cyan">
+                                @if(count($resultadosPracticas) > 0)
+                                    <ul class="absolute z-20 w-full mt-1 bg-white border border-gray-200 rounded-xl shadow-lg max-h-60 overflow-y-auto">
+                                        @foreach($resultadosPracticas as $prac)
+                                            <li wire:click="seleccionarPractica('{{ $prac->ulid }}')" class="px-4 py-2 hover:bg-pba-blue/10 cursor-pointer border-b border-gray-50 last:border-0 text-xs flex justify-between">
+                                                <div><span class="font-mono font-bold text-pba-blue">{{ $prac->codigo }}</span> <span class="text-gray-600 truncate inline-block w-40 align-bottom">{{ $prac->descripcion }}</span></div>
+                                                @if(!is_null($prac->valor)) <span class="font-bold text-gray-800">${{ number_format($prac->valor, 2, ',', '.') }}</span> @endif
+                                            </li>
+                                        @endforeach
+                                    </ul>
+                                @endif
+                            </div>
                         </div>
-                        <input wire:model="nuevaPractica.descripcion_practica" type="text" placeholder="Descripción de la práctica" class="w-full rounded-lg border-gray-200 text-xs focus:ring-pba-cyan">
+
                         <div class="flex gap-2 items-end">
                             <div class="w-1/4"><label class="text-[9px] font-bold text-gray-400 uppercase">Cant.</label><input wire:model="nuevaPractica.cantidad" type="number" min="1" class="w-full rounded-lg border-gray-200 text-xs focus:ring-pba-cyan"></div>
-                            <div class="w-2/4"><label class="text-[9px] font-bold text-gray-400 uppercase">Valor ($)</label><input wire:model="nuevaPractica.valor_unitario" type="number" step="0.01" class="w-full rounded-lg border-gray-200 text-xs focus:ring-pba-cyan"></div>
-                            <button wire:click="agregarPractica" class="w-1/4 py-2 bg-pba-cyan text-white font-bold rounded-lg text-xs hover:bg-teal-500 transition-colors">Sumar</button>
+                            <div class="w-2/4"><label class="text-[9px] font-bold text-gray-400 uppercase">Valor ($)</label><input wire:model="nuevaPractica.valor_unitario" type="number" step="0.01" class="w-full rounded-lg border-gray-200 text-xs focus:ring-pba-cyan" {{ $nuevaPractica['nomenclador_origen'] !== 'CUSTOM' && $nuevaPractica['valor_unitario'] > 0 ? 'readonly' : '' }}></div>
+                            <button wire:click="agregarPractica" class="w-1/4 py-2 bg-pba-cyan text-white font-bold rounded-lg text-xs hover:bg-teal-500 transition-colors" {{ empty($nuevaPractica['codigo_practica']) ? 'disabled' : '' }}>Sumar</button>
                         </div>
                     </div>
-                    <div class="max-h-64 overflow-y-auto bg-gray-50/30">
+                    <div class="max-h-64 overflow-y-auto bg-gray-50/30 rounded-b-2xl">
                         <ul class="divide-y divide-gray-100">
                             @forelse($practicas as $practica)
                                 <li class="p-3 hover:bg-white transition-colors">
@@ -372,6 +504,7 @@ new class extends Component {
             </div>
         </div>
 
+        <!-- PESTAÑA 2: PACIENTE -->
         <div x-show="tab === 'paciente'" x-transition.opacity style="display: none;" class="max-w-4xl mx-auto">
             <div class="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
                 <div class="bg-pba-blue/5 px-8 py-6 border-b border-gray-100 flex items-center gap-4">
@@ -412,11 +545,12 @@ new class extends Component {
             </div>
         </div>
 
-        <div x-show="tab === 'documentos'" x-transition.opacity style="display: none;" class="max-w-4xl mx-auto">
-            @if (session()->has('doc_success')) <div class="mb-4 p-3 bg-green-50 text-green-700 text-sm font-bold rounded-lg border border-green-200">{{ session('doc_success') }}</div> @endif
-            @if (session()->has('doc_error')) <div class="mb-4 p-3 bg-red-50 text-red-700 text-sm font-bold rounded-lg border border-red-200">{{ session('doc_error') }}</div> @endif
+        <!-- PESTAÑA 3: DOCUMENTOS (AHORA INTELIGENTE) -->
+        <div x-show="tab === 'documentos'" x-transition.opacity style="display: none;" class="max-w-5xl mx-auto space-y-8">
+            @if (session()->has('doc_success')) <div class="p-3 bg-green-50 text-green-700 text-sm font-bold rounded-lg border border-green-200">{{ session('doc_success') }}</div> @endif
+            @if (session()->has('doc_error')) <div class="p-3 bg-red-50 text-red-700 text-sm font-bold rounded-lg border border-red-200">{{ session('doc_error') }}</div> @endif
 
-            <div class="bg-gray-50 border border-gray-200 rounded-2xl p-6 mb-6">
+            <div class="bg-gray-50 border border-gray-200 rounded-2xl p-6">
                 <h3 class="font-bold text-gray-800 mb-4">Adjuntar Nuevo Documento</h3>
                 <div class="flex flex-col md:flex-row gap-4 items-end">
                     <div class="flex-1 w-full">
@@ -434,32 +568,71 @@ new class extends Component {
                         <span wire:loading wire:target="subirDocumento">Espere...</span>
                     </button>
                 </div>
+                <!-- CHECKBOX DOCUMENTO GLOBAL -->
+                <div class="mt-4 flex items-center gap-2 bg-white p-3 rounded-xl border border-blue-100">
+                    <input wire:model="esDocumentoGlobal" type="checkbox" id="checkGlobal" class="rounded text-pba-blue focus:ring-pba-blue cursor-pointer w-4 h-4">
+                    <label for="checkGlobal" class="text-sm font-medium text-gray-700 cursor-pointer select-none">
+                        Guardar como <span class="font-bold text-pba-blue">Documento Global del Paciente</span> (DNI, Certificados crónicos, etc. Será visible en futuros expedientes de este paciente).
+                    </label>
+                </div>
             </div>
 
-            <div class="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden">
-                <table class="w-full text-left">
-                    <thead class="bg-gray-50 border-b border-gray-100">
-                    <tr><th class="px-6 py-3 text-xs font-bold text-gray-500 uppercase">Documento</th><th class="px-6 py-3 text-xs font-bold text-gray-500 uppercase">Formato</th><th class="px-6 py-3 text-xs font-bold text-gray-500 uppercase">Fecha</th><th class="px-6 py-3 text-right text-xs font-bold text-gray-500 uppercase">Acciones</th></tr>
-                    </thead>
-                    <tbody class="divide-y divide-gray-100">
-                    @forelse($documentos as $doc)
-                        <tr class="hover:bg-gray-50">
-                            <td class="px-6 py-4 font-bold text-gray-800 text-sm">{{ $doc->nombre_original }}</td>
-                            <td class="px-6 py-4"><span class="px-2 py-1 bg-gray-200 text-gray-700 text-xs font-bold uppercase rounded">{{ pathinfo($doc->ruta_archivo, PATHINFO_EXTENSION) }}</span></td>
-                            <td class="px-6 py-4 text-xs text-gray-500">{{ $doc->created_at->format('d/m/Y H:i') }}</td>
-                            <td class="px-6 py-4 text-right space-x-3">
-                                <button wire:click="descargarDocumento('{{ $doc->ulid }}')" class="text-pba-blue hover:text-pba-cyan font-bold text-xs uppercase">Bajar</button>
-                                <button wire:click="eliminarDocumento('{{ $doc->ulid }}')" class="text-red-500 hover:text-red-700 font-bold text-xs uppercase">Borrar</button>
-                            </td>
-                        </tr>
-                    @empty
-                        <tr><td colspan="4" class="px-6 py-12 text-center text-gray-400 italic">No hay documentos adjuntos.</td></tr>
-                    @endforelse
-                    </tbody>
-                </table>
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <!-- DOCUMENTOS DEL EPISODIO -->
+                <div class="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden flex flex-col h-full">
+                    <div class="bg-gray-800 px-4 py-3 flex items-center gap-2">
+                        <svg class="w-5 h-5 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                        <h4 class="font-bold text-white text-sm">Documentos de este Episodio</h4>
+                    </div>
+                    <div class="p-4 flex-1 overflow-y-auto">
+                        <ul class="divide-y divide-gray-100">
+                            @forelse($documentosTramite as $doc)
+                                <li class="py-3 flex justify-between items-center group">
+                                    <div>
+                                        <p class="font-bold text-gray-800 text-sm">{{ $doc->nombre_original }}</p>
+                                        <p class="text-xs text-gray-500 font-mono">{{ $doc->created_at->format('d/m/Y') }} | {{ strtoupper(pathinfo($doc->ruta_archivo, PATHINFO_EXTENSION)) }}</p>
+                                    </div>
+                                    <div class="flex gap-2">
+                                        <button wire:click="descargarDocumento('{{ $doc->ulid }}')" class="p-1.5 text-gray-400 hover:text-pba-blue transition-colors rounded-lg hover:bg-blue-50" title="Descargar"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg></button>
+                                        <button wire:click="eliminarDocumento('{{ $doc->ulid }}')" wire:confirm="¿Borrar este documento?" class="p-1.5 text-gray-400 hover:text-red-500 transition-colors rounded-lg hover:bg-red-50" title="Eliminar"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg></button>
+                                    </div>
+                                </li>
+                            @empty
+                                <li class="py-8 text-center text-gray-400 text-sm italic">Sin documentos para este episodio.</li>
+                            @endforelse
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- DOCUMENTOS DEL PACIENTE (HISTORIAL) -->
+                <div class="bg-indigo-50 border border-indigo-100 rounded-2xl shadow-sm overflow-hidden flex flex-col h-full">
+                    <div class="bg-indigo-600 px-4 py-3 flex items-center gap-2">
+                        <svg class="w-5 h-5 text-indigo-200" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"></path></svg>
+                        <h4 class="font-bold text-white text-sm">Archivo Global del Paciente</h4>
+                    </div>
+                    <div class="p-4 flex-1 overflow-y-auto">
+                        <ul class="divide-y divide-indigo-200/50">
+                            @forelse($documentosPaciente as $doc)
+                                <li class="py-3 flex justify-between items-center group">
+                                    <div>
+                                        <p class="font-bold text-indigo-900 text-sm">{{ $doc->nombre_original }}</p>
+                                        <p class="text-xs text-indigo-500 font-mono">{{ $doc->created_at->format('d/m/Y') }} | {{ strtoupper(pathinfo($doc->ruta_archivo, PATHINFO_EXTENSION)) }}</p>
+                                    </div>
+                                    <div class="flex gap-2">
+                                        <button wire:click="descargarDocumento('{{ $doc->ulid }}')" class="p-1.5 text-indigo-400 hover:text-indigo-700 transition-colors rounded-lg hover:bg-white" title="Descargar"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg></button>
+                                        <button wire:click="eliminarDocumento('{{ $doc->ulid }}')" wire:confirm="Atención: Este documento pertenece al historial global del paciente. ¿Borrarlo de todos modos?" class="p-1.5 text-indigo-400 hover:text-red-500 transition-colors rounded-lg hover:bg-white" title="Eliminar Global"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg></button>
+                                    </div>
+                                </li>
+                            @empty
+                                <li class="py-8 text-center text-indigo-400 text-sm italic">Sin documentos globales registrados.</li>
+                            @endforelse
+                        </ul>
+                    </div>
+                </div>
             </div>
         </div>
 
+        <!-- PESTAÑA 4: AUDITORÍA -->
         @canany(['ver-gestion-guardia', 'dev'])
             <div x-show="tab === 'auditoria'" x-transition.opacity style="display: none;" class="max-w-4xl mx-auto">
                 <div class="bg-gray-900 rounded-2xl shadow-lg overflow-hidden">

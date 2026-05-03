@@ -26,7 +26,7 @@
                     <p class="font-sans text-xs text-gray-500 leading-snug">Importar archivos Excel HSI.</p>
                 </a>
 
-                <a href="#" class="flex flex-col p-5 bg-white border border-gray-200 rounded-2xl shadow-sm hover:shadow-md hover:border-pba-cyan/60 hover:-translate-y-1 transition-all duration-200 group text-center cursor-pointer">
+                <a href="{{ route('config.nomencladores') }}" class="flex flex-col p-5 bg-white border border-gray-200 rounded-2xl shadow-sm hover:shadow-md hover:border-pba-cyan/60 hover:-translate-y-1 transition-all duration-200 group text-center cursor-pointer">
                     <div class="w-12 h-12 mx-auto mb-4 rounded-xl bg-pba-cyan/10 flex items-center justify-center text-pba-cyan group-hover:bg-pba-cyan group-hover:text-white transition-colors">
                         <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"></path></svg>
                     </div>

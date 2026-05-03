@@ -1,0 +1,13 @@
+<x-app-layout>
+    <x-slot name="header">
+        <h2 class="font-pba font-extrabold text-2xl text-pba-blue leading-tight uppercase tracking-tight">
+            Gestión de Nomencladores (SAMO / PAMI / IOMA)
+        </h2>
+    </x-slot>
+
+    <div class="py-8">
+        <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
+            <livewire:gestion-nomencladores />
+        </div>
+    </div>
+</x-app-layout>
