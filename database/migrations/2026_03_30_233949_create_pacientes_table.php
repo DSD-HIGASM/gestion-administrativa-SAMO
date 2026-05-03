@@ -19,7 +19,8 @@ return new class extends Migration
             $table->string('documento')->nullable();
             $table->date('fecha_nacimiento')->nullable();
             $table->string('telefono')->nullable();
-            $table->json('obras_sociales')->nullable();
+            $table->json('coberturas')->nullable();
+            $table->json('samo_coberturas')->nullable();
             $table->integer('id_paciente_hsi')->nullable();
             $table->enum('sexo', ['Masculino','Femenino','X'])->nullable();
 

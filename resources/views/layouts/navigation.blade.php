@@ -20,21 +20,29 @@
                         Inicio
                     </x-nav-link>
 
-                    <x-nav-link :href="route('samo.guardia.index')" class="font-sans font-bold text-[12px] uppercase tracking-wider text-gray-500 hover:text-pba-blue hover:border-pba-cyan focus:text-pba-blue transition">
-                        Guardia
-                    </x-nav-link>
+                    @canany(['ver-gestion-guardia', 'facturar-guardia'])
+                        <x-nav-link :href="route('samo.guardia.index')" class="font-sans font-bold text-[12px] uppercase tracking-wider text-gray-500 hover:text-pba-blue hover:border-pba-cyan focus:text-pba-blue transition">
+                            Guardia
+                        </x-nav-link>
+                    @endcanany
 
-                    <x-nav-link :href="route('samo.ambulatorio.index')" class="font-sans font-bold text-[12px] uppercase tracking-wider text-gray-500 hover:text-pba-blue hover:border-pba-cyan focus:text-pba-blue transition">
-                        Ambulatorio
-                    </x-nav-link>
+                    @can('dev-config')
+                        <x-nav-link :href="route('samo.ambulatorio.index')" class="font-sans font-bold text-[12px] uppercase tracking-wider text-gray-500 hover:text-pba-blue hover:border-pba-cyan focus:text-pba-blue transition">
+                            Ambulatorio
+                        </x-nav-link>
+                    @endcan
 
-                    <x-nav-link href="#" class="font-sans font-bold text-[12px] uppercase tracking-wider text-gray-500 hover:text-pba-blue hover:border-pba-cyan focus:text-pba-blue transition">
-                        Nomencladores
-                    </x-nav-link>
+                    @can('dev-config')
+                        <x-nav-link href="#" class="font-sans font-bold text-[12px] uppercase tracking-wider text-gray-500 hover:text-pba-blue hover:border-pba-cyan focus:text-pba-blue transition">
+                            Nomencladores
+                        </x-nav-link>
+                    @endcan
 
-                    <x-nav-link :href="route('config.index')" class="font-sans font-bold text-[12px] uppercase tracking-wider text-gray-500 hover:text-pba-blue hover:border-pba-cyan focus:text-pba-blue transition">
-                        Configuraciónes
-                    </x-nav-link>
+                    @can('config')
+                        <x-nav-link :href="route('config.index')" class="font-sans font-bold text-[12px] uppercase tracking-wider text-gray-500 hover:text-pba-blue hover:border-pba-cyan focus:text-pba-blue transition">
+                            Configuraciónes
+                        </x-nav-link>
+                    @endcan
                 </div>
             </div>
 
@@ -52,7 +60,6 @@
                     </x-slot>
 
                     <x-slot name="content">
-
                         <form method="POST" action="{{ route('logout') }}">
                             @csrf
                             <x-dropdown-link :href="route('logout')"
@@ -81,18 +88,30 @@
             <x-responsive-nav-link :href="route('dashboard')" :active="request()->routeIs('dashboard')" class="font-sans font-bold text-pba-blue border-pba-cyan">
                 Inicio
             </x-responsive-nav-link>
-            <x-responsive-nav-link href="#" class="font-sans font-bold text-gray-600">
-                Guardia
-            </x-responsive-nav-link>
-            <x-responsive-nav-link href="#" class="font-sans font-bold text-gray-600">
-                Ambulatorio
-            </x-responsive-nav-link>
-            <x-responsive-nav-link href="#" class="font-sans font-bold text-gray-600">
-                Nomencladores
-            </x-responsive-nav-link>
-            <x-responsive-nav-link :href="route('config.index')" class="font-sans font-bold text-gray-600">
-                Configuraciónes
-            </x-responsive-nav-link>
+
+            @canany(['ver-gestion-guardia', 'facturar-guardia'])
+                <x-responsive-nav-link href="#" class="font-sans font-bold text-gray-600">
+                    Guardia
+                </x-responsive-nav-link>
+            @endcanany
+
+            @can('dev-config')
+                <x-responsive-nav-link href="#" class="font-sans font-bold text-gray-600">
+                    Ambulatorio
+                </x-responsive-nav-link>
+            @endcan
+
+            @can('dev-config')
+                <x-responsive-nav-link href="#" class="font-sans font-bold text-gray-600">
+                    Nomencladores
+                </x-responsive-nav-link>
+            @endcan
+
+            @can('config')
+                <x-responsive-nav-link :href="route('config.index')" class="font-sans font-bold text-gray-600">
+                    Configuraciónes
+                </x-responsive-nav-link>
+            @endcan
         </div>
 
         <div class="pt-4 pb-1 border-t border-gray-200 bg-gray-50">
@@ -102,7 +121,6 @@
             </div>
 
             <div class="mt-3 space-y-1">
-
                 <form method="POST" action="{{ route('logout') }}">
                     @csrf
                     <x-responsive-nav-link :href="route('logout')"

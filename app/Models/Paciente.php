@@ -24,6 +24,7 @@ class Paciente extends Model
         'obras_sociales',
         'id_paciente_hsi',
         'sexo',
+        'samo_coberturas',
     ];
 
     protected function casts(): array
@@ -31,6 +32,7 @@ class Paciente extends Model
         return [
             'fecha_nacimiento' => 'date',
             'obras_sociales' => 'array',
+            'samo_coberturas' => 'array',
         ];
     }
 }

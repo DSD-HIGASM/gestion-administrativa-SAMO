@@ -19,7 +19,6 @@ new class extends Component {
 
     public SamoTramite $tramite;
 
-    // Colecciones Principales
     public $practicas = [];
     public $diagnosticos = [];
     public $documentosTramite = [];
@@ -28,22 +27,22 @@ new class extends Component {
     public $estadosDisponibles = [];
     public $usuariosCache = [];
 
-    // Buscadores Predictivos
     public $busquedaPractica = '';
     public $resultadosPracticas = [];
     public $busquedaCie10 = '';
     public $resultadosCie10 = [];
 
-    // Formularios
     public $nuevaPractica = ['nomenclador_origen' => 'SAMO', 'codigo_practica' => '', 'descripcion_practica' => '', 'cantidad' => 1, 'valor_unitario' => 0];
     public $nuevoDiagnostico = ['cie10_codigo' => '', 'descripcion' => '', 'tipo_diagnostico' => 'Principal'];
 
-    // Archivos
+    // Múltiples Obras Sociales (Array Dinámico)
+    public $modoEdicionPaciente = false;
+    public $coberturasPaciente = [];
+
     public $archivoNuevo;
     public $nombreArchivoCustom = '';
     public $esDocumentoGlobal = false;
 
-    // Estado general
     public $estadoActualUlid;
     public $observaciones;
 
@@ -53,6 +52,9 @@ new class extends Component {
         $this->estadoActualUlid = $tramite->estado_ulid;
         $this->observaciones = $tramite->observaciones_internas;
         $this->estadosDisponibles = SamoEstado::orderBy('orden_logico')->get();
+
+        // Cargamos el array JSON de coberturas de la BD, si está vacío iniciamos con uno en blanco
+        $this->coberturasPaciente = $tramite->paciente->samo_coberturas ?? [];
 
         $this->cargarRelaciones();
         $this->registrarAuditoria('apertura_expediente', ['metodo' => 'Ingreso a la vista detallada', 'estado_al_abrir' => $this->obtenerNombreEstado($this->estadoActualUlid)]);
@@ -82,19 +84,69 @@ new class extends Component {
     private function registrarAuditoria($accion, $detalles = [])
     {
         $detalles['ip'] = request()->ip();
-
-        SamoAuditoria::create([
-            'samo_tramite_ulid' => $this->tramite->ulid,
-            'usuario_ulid' => Auth::id(),
-            'accion' => $accion,
-            'detalles' => json_encode($detalles, JSON_UNESCAPED_UNICODE)
-        ]);
+        SamoAuditoria::create(['samo_tramite_ulid' => $this->tramite->ulid, 'usuario_ulid' => Auth::id(), 'accion' => $accion, 'detalles' => json_encode($detalles, JSON_UNESCAPED_UNICODE)]);
         $this->cargarRelaciones();
     }
 
     public function registrarCierreAbandonado()
     {
         $this->registrarAuditoria('cierre_expediente_forzado', ['metodo' => 'Abandono de pestaña/navegador']);
+    }
+
+    // --- LOGICA MÚLTIPLES OBRAS SOCIALES ---
+    public function agregarCobertura()
+    {
+        $this->coberturasPaciente[] = [
+            'obra_social' => '',
+            'numero_afiliado' => '',
+            'fuente_verificacion' => '',
+            'fecha_vencimiento' => ''
+        ];
+    }
+
+    public function eliminarCobertura($index)
+    {
+        unset($this->coberturasPaciente[$index]);
+        $this->coberturasPaciente = array_values($this->coberturasPaciente); // Reindexar el array
+    }
+
+    public function updated($property, $value)
+    {
+        // Detectar si cambió alguna fuente de verificación en el array (Ej: coberturasPaciente.0.fuente_verificacion)
+        if (preg_match('/coberturasPaciente\.(\d+)\.fuente_verificacion/', $property, $matches)) {
+            $index = $matches[1];
+            $fechasMaestras = [
+                'PAMI' => '2026-12-31',
+                'IOMA' => '2026-06-30',
+                'SUPERINTENDENCIA' => '2026-08-15',
+                'PUCO' => '2026-10-01'
+            ];
+            if (isset($fechasMaestras[$value])) {
+                $this->coberturasPaciente[$index]['fecha_vencimiento'] = $fechasMaestras[$value];
+            }
+        }
+    }
+
+    public function guardarDatosPaciente()
+    {
+        // Limpiamos coberturas vacías antes de guardar
+        $coberturasLimpias = array_filter($this->coberturasPaciente, function($cob) {
+            return !empty(trim($cob['obra_social']));
+        });
+
+        // Guardamos el JSON en la base de datos
+        $this->tramite->paciente->update(['samo_coberturas' => array_values($coberturasLimpias)]);
+
+        $this->registrarAuditoria('actualiza_datos_paciente', [
+            'coberturas_cargadas' => count($coberturasLimpias)
+        ]);
+
+        // Actualizamos la vista
+        $this->coberturasPaciente = array_values($coberturasLimpias);
+        $this->modoEdicionPaciente = false;
+
+        session()->flash('success', 'Datos de cobertura SAMO actualizados exitosamente.');
+        $this->tramite->refresh();
     }
 
     // --- BUSCADORES PREDICTIVOS ---
@@ -169,12 +221,7 @@ new class extends Component {
             'valor_subtotal' => $subtotal,
         ]);
 
-        $this->registrarAuditoria('carga_practica', [
-            'codigo' => $practica->codigo_practica,
-            'cantidad' => $practica->cantidad,
-            'valor_unitario' => $practica->valor_unitario,
-            'monto_agregado' => $subtotal
-        ]);
+        $this->registrarAuditoria('carga_practica', ['codigo' => $practica->codigo_practica, 'monto_agregado' => $subtotal]);
 
         $this->nuevaPractica = ['nomenclador_origen' => $this->nuevaPractica['nomenclador_origen'], 'codigo_practica' => '', 'descripcion_practica' => '', 'cantidad' => 1, 'valor_unitario' => 0];
         $this->busquedaPractica = '';
@@ -185,10 +232,7 @@ new class extends Component {
     {
         $practica = SamoTramitePractica::find($ulid);
         if($practica) {
-            $this->registrarAuditoria('elimina_practica', [
-                'codigo_borrado' => $practica->codigo_practica,
-                'monto_restado' => $practica->valor_subtotal
-            ]);
+            $this->registrarAuditoria('elimina_practica', ['codigo_borrado' => $practica->codigo_practica, 'monto_restado' => $practica->valor_subtotal]);
             $practica->delete();
             $this->recalcularTotal();
         }
@@ -197,16 +241,7 @@ new class extends Component {
     private function recalcularTotal()
     {
         $total = SamoTramitePractica::where('samo_tramite_ulid', $this->tramite->ulid)->sum('valor_subtotal');
-        $totalAnterior = $this->tramite->monto_total_calculado;
         $this->tramite->update(['monto_total_calculado' => $total]);
-
-        if($totalAnterior != $total) {
-            $this->registrarAuditoria('recalculo_total', [
-                'total_anterior' => $totalAnterior,
-                'total_nuevo' => $total,
-                'diferencia' => $total - $totalAnterior
-            ]);
-        }
         $this->cargarRelaciones();
     }
 
@@ -220,10 +255,7 @@ new class extends Component {
             'tipo_diagnostico' => $this->nuevoDiagnostico['tipo_diagnostico'],
         ]);
 
-        $this->registrarAuditoria('carga_diagnostico', [
-            'cie10' => $diag->cie10_codigo,
-            'tipo' => $diag->tipo_diagnostico
-        ]);
+        $this->registrarAuditoria('carga_diagnostico', ['cie10' => $diag->cie10_codigo]);
 
         $this->nuevoDiagnostico = ['cie10_codigo' => '', 'descripcion' => '', 'tipo_diagnostico' => 'Principal'];
         $this->busquedaCie10 = '';
@@ -250,7 +282,6 @@ new class extends Component {
         $extension = $this->archivoNuevo->getClientOriginalExtension();
         $nombreFinal = \Illuminate\Support\Str::slug($this->nombreArchivoCustom) . '_' . time() . '.' . $extension;
 
-        // Separo en carpetas distintas
         $carpeta = $this->esDocumentoGlobal
             ? 'samo_documentos/paciente/' . $this->tramite->paciente_ulid
             : 'samo_documentos/tramite/' . $this->tramite->ulid;
@@ -265,10 +296,7 @@ new class extends Component {
             'ruta_archivo' => $ruta,
         ]);
 
-        $this->registrarAuditoria('sube_documento', [
-            'nombre_archivo' => $this->nombreArchivoCustom,
-            'es_global' => $this->esDocumentoGlobal ? 'Si' : 'No'
-        ]);
+        $this->registrarAuditoria('sube_documento', ['nombre_archivo' => $this->nombreArchivoCustom, 'global' => $this->esDocumentoGlobal]);
 
         $this->reset(['archivoNuevo', 'nombreArchivoCustom', 'esDocumentoGlobal']);
         $this->cargarRelaciones();
@@ -283,7 +311,6 @@ new class extends Component {
             $ext = pathinfo($doc->ruta_archivo, PATHINFO_EXTENSION);
             return Storage::disk('public')->download($doc->ruta_archivo, $doc->nombre_original . '.' . $ext);
         }
-        session()->flash('doc_error', 'El archivo físico no se encuentra en el servidor.');
     }
 
     public function eliminarDocumento($ulid)
@@ -299,27 +326,10 @@ new class extends Component {
 
     public function guardarCambiosTramite()
     {
-        $estadoAnterior = $this->tramite->estado_ulid;
-        $obsAnterior = $this->tramite->observaciones_internas;
-
         $this->tramite->update([
             'estado_ulid' => $this->estadoActualUlid,
             'observaciones_internas' => $this->observaciones,
         ]);
-
-        if($estadoAnterior !== $this->estadoActualUlid) {
-            $this->registrarAuditoria('cambio_estado', [
-                'estado_anterior' => $this->obtenerNombreEstado($estadoAnterior),
-                'estado_nuevo' => $this->obtenerNombreEstado($this->estadoActualUlid)
-            ]);
-        }
-
-        if($obsAnterior !== $this->observaciones) {
-            $this->registrarAuditoria('actualiza_observaciones', [
-                'observacion_anterior' => $obsAnterior ?: 'Vacio',
-                'observacion_nueva' => $this->observaciones ?: 'Vacio'
-            ]);
-        }
 
         $this->registrarAuditoria('guardado_manual', ['metodo' => 'Botón de guardado general']);
         session()->flash('success', 'Expediente actualizado y guardado.');
@@ -350,7 +360,6 @@ new class extends Component {
         </button>
     </div>
 
-    <!-- NOTIFICACIONES -->
     @if (session()->has('success'))
         <div x-data="{ show: true }" x-show="show" x-init="setTimeout(() => show = false, 3000)" class="mb-6 text-sm font-bold text-green-700 bg-green-50 border-l-4 border-green-500 p-4 rounded-r-xl shadow-sm">{{ session('success') }}</div>
     @endif
@@ -416,19 +425,11 @@ new class extends Component {
                         @forelse($diagnosticos as $diag)
                             <li class="p-3 flex justify-between items-center hover:bg-gray-50 transition-colors">
                                 <div class="flex items-center gap-2 overflow-hidden pr-4">
-                <span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase whitespace-nowrap {{ $diag->tipo_diagnostico === 'Principal' ? 'bg-pba-blue/10 text-pba-blue' : 'bg-gray-100 text-gray-600' }}">
-                    {{ $diag->tipo_diagnostico }}
-                </span>
-                                    <span class="font-mono font-bold text-sm text-gray-800 whitespace-nowrap">
-                    {{ $diag->cie10_codigo }}
-                </span>
-                                    <span class="font-sans text-sm text-gray-600 truncate">
-                    - {{ $diag->cie10_descripcion }}
-                </span>
+                                    <span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase whitespace-nowrap {{ $diag->tipo_diagnostico === 'Principal' ? 'bg-pba-blue/10 text-pba-blue' : 'bg-gray-100 text-gray-600' }}">{{ $diag->tipo_diagnostico }}</span>
+                                    <span class="font-mono font-bold text-sm text-gray-800 whitespace-nowrap">{{ $diag->cie10_codigo }}</span>
+                                    <span class="font-sans text-sm text-gray-600 truncate">- {{ $diag->cie10_descripcion }}</span>
                                 </div>
-                                <button wire:click="eliminarDiagnostico('{{ $diag->ulid }}')" class="text-red-400 hover:text-red-600 font-bold text-[10px] uppercase shrink-0 transition-colors">
-                                    Borrar
-                                </button>
+                                <button wire:click="eliminarDiagnostico('{{ $diag->ulid }}')" class="text-red-400 hover:text-red-600 font-bold text-[10px] uppercase shrink-0 transition-colors">Borrar</button>
                             </li>
                         @empty
                             <li class="p-4 text-center text-xs text-gray-400 italic">No hay diagnósticos cargados.</li>
@@ -504,9 +505,9 @@ new class extends Component {
             </div>
         </div>
 
-        <!-- PESTAÑA 2: PACIENTE -->
+        <!-- PESTAÑA 2: PACIENTE Y PADRONIZACION SAMO -->
         <div x-show="tab === 'paciente'" x-transition.opacity style="display: none;" class="max-w-4xl mx-auto">
-            <div class="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+            <div class="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden mb-8">
                 <div class="bg-pba-blue/5 px-8 py-6 border-b border-gray-100 flex items-center gap-4">
                     <div class="w-16 h-16 bg-pba-blue text-white rounded-full flex items-center justify-center font-pba text-2xl font-bold shadow-md">
                         {{ substr($tramite->paciente->nombres, 0, 1) }}{{ substr($tramite->paciente->apellidos, 0, 1) }}
@@ -521,25 +522,110 @@ new class extends Component {
                 </div>
                 <div class="p-8 grid grid-cols-1 md:grid-cols-2 gap-8">
                     <div class="space-y-4">
-                        <h4 class="font-bold text-gray-800 border-b border-gray-100 pb-2">Datos Demográficos</h4>
+                        <h4 class="font-bold text-gray-800 border-b border-gray-100 pb-2">Datos Demográficos (Lectura)</h4>
                         <div class="grid grid-cols-2 gap-4">
                             <div><p class="text-[10px] text-gray-400 font-bold uppercase">Nacimiento</p><p class="text-sm font-medium text-gray-800">{{ $tramite->paciente->fecha_nacimiento ? \Carbon\Carbon::parse($tramite->paciente->fecha_nacimiento)->format('d/m/Y') : 'No registrado' }}</p></div>
                             <div><p class="text-[10px] text-gray-400 font-bold uppercase">Edad</p><p class="text-sm font-medium text-gray-800">{{ $tramite->paciente->fecha_nacimiento ? \Carbon\Carbon::parse($tramite->paciente->fecha_nacimiento)->age . ' años' : 'N/A' }}</p></div>
                             <div><p class="text-[10px] text-gray-400 font-bold uppercase">Sexo Registrado</p><p class="text-sm font-medium text-gray-800">{{ $tramite->paciente->sexo ?: 'No registrado' }}</p></div>
                             <div><p class="text-[10px] text-gray-400 font-bold uppercase">Teléfono</p><p class="text-sm font-medium text-gray-800">{{ $tramite->paciente->telefono ?: 'Sin teléfono' }}</p></div>
                         </div>
-                    </div>
-                    <div class="space-y-4">
-                        <h4 class="font-bold text-gray-800 border-b border-gray-100 pb-2">Cobertura Financiera</h4>
-                        <div class="bg-gray-50 p-4 rounded-xl border border-gray-200">
-                            <p class="text-[10px] text-gray-400 font-bold uppercase mb-1">Obra Social Facturada (Episodio)</p>
-                            <p class="text-lg font-bold text-pba-cyan">{{ $tramite->obra_social_facturada ?: 'Ninguna (Arancelado)' }}</p>
-                            @if($tramite->numero_afiliado_facturado) <p class="text-xs text-gray-500 mt-1 font-mono">Afiliado N°: {{ $tramite->numero_afiliado_facturado }}</p> @endif
-                        </div>
-                        <div class="mt-4">
-                            <label class="text-[10px] text-gray-400 font-bold uppercase block mb-1">Observaciones Internas</label>
+
+                        <div class="mt-6">
+                            <label class="text-[10px] text-gray-400 font-bold uppercase block mb-1">Observaciones Internas del Expediente</label>
                             <textarea wire:model="observaciones" rows="4" class="w-full rounded-xl border-gray-200 text-sm focus:ring-pba-cyan bg-yellow-50" placeholder="Escribe notas permanentes aquí..."></textarea>
                         </div>
+
+                        <div class="mt-4 p-3 border border-dashed border-gray-200 rounded-lg">
+                            <p class="text-[10px] text-gray-400 font-bold uppercase mb-1">Cobertura original informada por HSI</p>
+                            <p class="text-sm font-medium text-gray-600">{{ $tramite->obra_social_facturada ?: 'Ninguna' }} {{ $tramite->numero_afiliado_facturado ? ' - N°: ' . $tramite->numero_afiliado_facturado : '' }}</p>
+                        </div>
+                    </div>
+
+                    <div class="space-y-4">
+                        <div class="flex justify-between items-center border-b border-gray-100 pb-2">
+                            <h4 class="font-bold text-gray-800">Múltiples Coberturas (SAMO)</h4>
+                            @if(!$modoEdicionPaciente)
+                                <button wire:click="$set('modoEdicionPaciente', true)" class="text-[10px] bg-gray-100 hover:bg-gray-200 px-2 py-1 rounded font-bold text-gray-600 uppercase transition-colors">Editar / Padronizar</button>
+                            @endif
+                        </div>
+
+                        @if($modoEdicionPaciente)
+                            <div class="space-y-4 max-h-[400px] overflow-y-auto pr-2">
+                                @foreach($coberturasPaciente as $index => $cobertura)
+                                    <div class="bg-blue-50/50 p-4 rounded-xl border border-blue-100 relative">
+                                        <button wire:click="eliminarCobertura({{ $index }})" class="absolute top-2 right-2 text-red-400 hover:text-red-600" title="Borrar Obra Social">
+                                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                                        </button>
+                                        <div class="space-y-3">
+                                            <div>
+                                                <label class="text-[10px] text-gray-500 font-bold uppercase block mb-1">Obra Social Real</label>
+                                                <input wire:model="coberturasPaciente.{{ $index }}.obra_social" type="text" class="w-full rounded-xl border-gray-200 text-sm focus:ring-pba-cyan" placeholder="Ej: IOMA, PAMI...">
+                                            </div>
+                                            <div>
+                                                <label class="text-[10px] text-gray-500 font-bold uppercase block mb-1">Número de Afiliado</label>
+                                                <input wire:model="coberturasPaciente.{{ $index }}.numero_afiliado" type="text" class="w-full rounded-xl border-gray-200 text-sm focus:ring-pba-cyan">
+                                            </div>
+                                            <div class="grid grid-cols-2 gap-3">
+                                                <div>
+                                                    <label class="text-[10px] text-gray-500 font-bold uppercase block mb-1">Fuente Verific.</label>
+                                                    <select wire:model.live="coberturasPaciente.{{ $index }}.fuente_verificacion" class="w-full rounded-xl border-gray-200 text-sm focus:ring-pba-cyan">
+                                                        <option value="">Seleccionar...</option>
+                                                        <option value="PUCO">PUCO</option>
+                                                        <option value="PAMI">Padrón PAMI</option>
+                                                        <option value="IOMA">Padrón IOMA</option>
+                                                        <option value="SUPERINTENDENCIA">Superintendencia SSS</option>
+                                                    </select>
+                                                </div>
+                                                <div>
+                                                    <label class="text-[10px] text-gray-500 font-bold uppercase block mb-1">Vencimiento</label>
+                                                    <input wire:model="coberturasPaciente.{{ $index }}.fecha_vencimiento" type="date" class="w-full rounded-xl border-gray-200 text-sm focus:ring-pba-cyan bg-gray-50" readonly title="Cálculo automático">
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                @endforeach
+
+                                <button wire:click="agregarCobertura" class="w-full border-2 border-dashed border-gray-200 text-gray-500 hover:text-pba-blue hover:border-pba-blue hover:bg-blue-50 transition-colors py-2 rounded-xl text-xs font-bold uppercase">
+                                    + Añadir Obra Social
+                                </button>
+                            </div>
+
+                            <div class="flex gap-2 pt-4 border-t border-gray-100">
+                                <button wire:click="guardarDatosPaciente" class="flex-1 bg-pba-cyan hover:bg-teal-500 text-white text-xs font-bold py-3 rounded-xl transition-colors">Guardar Padronización</button>
+                                <button wire:click="$set('modoEdicionPaciente', false)" class="bg-gray-200 hover:bg-gray-300 text-gray-700 text-xs font-bold px-4 py-3 rounded-xl transition-colors">Cancelar</button>
+                            </div>
+                        @else
+                            <div class="space-y-3">
+                                @forelse($coberturasPaciente as $cob)
+                                    <div class="bg-gray-50 p-4 rounded-xl border border-gray-200 relative overflow-hidden">
+                                        <div class="absolute left-0 top-0 bottom-0 w-1 bg-pba-cyan"></div>
+                                        <div class="mb-2">
+                                            <p class="text-lg font-bold text-pba-blue">{{ $cob['obra_social'] ?: 'Sin nombre' }}</p>
+                                            @if(!empty($cob['numero_afiliado'])) <p class="text-xs text-gray-600 font-mono">Afiliado: {{ $cob['numero_afiliado'] }}</p> @endif
+                                        </div>
+                                        @if(!empty($cob['fuente_verificacion']))
+                                            <div class="flex items-center justify-between border-t border-gray-200 pt-2 mt-2">
+                                                <div>
+                                                    <p class="text-[9px] text-gray-400 font-bold uppercase">Fuente</p>
+                                                    <p class="text-xs font-bold text-gray-700">{{ $cob['fuente_verificacion'] }}</p>
+                                                </div>
+                                                <div class="text-right">
+                                                    <p class="text-[9px] text-gray-400 font-bold uppercase">Vence</p>
+                                                    <p class="text-xs font-bold {{ !empty($cob['fecha_vencimiento']) && \Carbon\Carbon::parse($cob['fecha_vencimiento'])->isPast() ? 'text-red-500' : 'text-green-600' }}">
+                                                        {{ !empty($cob['fecha_vencimiento']) ? \Carbon\Carbon::parse($cob['fecha_vencimiento'])->format('d/m/Y') : 'N/A' }}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        @endif
+                                    </div>
+                                @empty
+                                    <div class="text-center p-6 border-2 border-dashed border-gray-200 rounded-xl">
+                                        <p class="text-sm font-bold text-gray-400 mb-1">Sin padronizar</p>
+                                        <p class="text-xs text-gray-500">Este paciente no tiene obras sociales verificadas por SAMO.</p>
+                                    </div>
+                                @endforelse
+                            </div>
+                        @endif
                     </div>
                 </div>
             </div>
@@ -604,7 +690,7 @@ new class extends Component {
                     </div>
                 </div>
 
-                <!-- DOCUMENTOS DEL PACIENTE (HISTORIAL) -->
+                <!-- DOCUMENTOS GLOBALES DEL PACIENTE -->
                 <div class="bg-indigo-50 border border-indigo-100 rounded-2xl shadow-sm overflow-hidden flex flex-col h-full">
                     <div class="bg-indigo-600 px-4 py-3 flex items-center gap-2">
                         <svg class="w-5 h-5 text-indigo-200" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"></path></svg>

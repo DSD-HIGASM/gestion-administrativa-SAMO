@@ -44,6 +44,10 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/configuracion/nomencladores', [App\Http\Controllers\NomencladorController::class, 'index'])
             ->name('config.nomencladores');
 
+        Route::get('/configuracion/jefatura', function () {
+            return view('config.jefatura');
+        })->name('config.jefatura');
+
     });
 
     Route::middleware(['auth', 'verified'])->prefix('samo')->name('samo.')->group(function () {

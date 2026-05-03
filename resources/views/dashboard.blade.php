@@ -1,56 +1,61 @@
 <x-app-layout>
-    <x-slot name="header">
-        <h2 class="font-pba font-extrabold text-2xl text-pba-blue leading-tight uppercase tracking-tight">
-            Panel de Control
-        </h2>
-    </x-slot>
+    <!-- Fondo Slate-100 para reducir el brillo general -->
+    <div class="min-h-[calc(100vh-64px)] bg-slate-100 flex flex-col justify-center py-8 px-4">
 
-    <div class="py-12">
-        <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
-            <div class="bg-white overflow-hidden shadow-xl shadow-gray-200/50 sm:rounded-2xl border border-gray-100">
-                <div class="p-10">
+        <div class="max-w-xl mx-auto w-full">
+            <!-- Tarjeta más pequeña y sobria -->
+            <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
 
-                    <div class="flex flex-col sm:flex-row items-start sm:items-center gap-6 mb-10 pb-8 border-b border-gray-100">
-                        <div class="w-16 h-16 bg-pba-cyan/10 rounded-2xl flex items-center justify-center text-pba-cyan shadow-inner">
-                            <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
-                            </svg>
-                        </div>
-                        <div>
-                            <h3 class="font-pba font-bold text-2xl text-pba-blue tracking-tight">Bienvenido, {{ Auth::user()->name ?? 'Operador' }}</h3>
-                            <p class="font-sans text-sm text-gray-500 mt-1">Resumen general de atenciones pendientes de facturación en el sistema SAMO.</p>
-                        </div>
+                <!-- Línea de acento PBA delgada -->
+                <div class="h-1 bg-pba-blue"></div>
+
+                <div class="p-8 text-center">
+
+                    <!-- Icono compacto -->
+                    <div class="inline-flex items-center justify-center w-20 h-20 bg-slate-50 text-pba-blue rounded-xl mb-6 border border-slate-100">
+                        <svg class="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path>
+                        </svg>
                     </div>
 
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-
-                        <div class="border border-gray-100 bg-gray-50 rounded-xl p-6 hover:shadow-lg hover:border-pba-cyan/30 transition duration-200">
-                            <div class="font-sans font-bold text-[11px] text-gray-500 uppercase tracking-widest mb-3">Guardia (HSI)</div>
-                            <div class="font-pba font-extrabold text-4xl text-pba-magenta">0</div>
-                            <div class="font-sans font-medium text-xs text-gray-400 mt-3 flex items-center gap-2">
-                                <span class="w-2 h-2 rounded-full bg-pba-magenta"></span> Atenciones sin mapear
-                            </div>
-                        </div>
-
-                        <div class="border border-gray-100 bg-gray-50 rounded-xl p-6 hover:shadow-lg hover:border-pba-cyan/30 transition duration-200">
-                            <div class="font-sans font-bold text-[11px] text-gray-500 uppercase tracking-widest mb-3">Consultorios Externos</div>
-                            <div class="font-pba font-extrabold text-4xl text-pba-magenta">0</div>
-                            <div class="font-sans font-medium text-xs text-gray-400 mt-3 flex items-center gap-2">
-                                <span class="w-2 h-2 rounded-full bg-pba-magenta"></span> Atenciones sin mapear
-                            </div>
-                        </div>
-
-                        <div class="border border-gray-100 bg-gray-50 rounded-xl p-6 hover:shadow-lg hover:border-pba-cyan/30 transition duration-200">
-                            <div class="font-sans font-bold text-[11px] text-gray-500 uppercase tracking-widest mb-3">Nomencladores</div>
-                            <div class="font-pba font-extrabold text-4xl text-pba-cyan">0</div>
-                            <div class="font-sans font-medium text-xs text-gray-400 mt-3 flex items-center gap-2">
-                                <span class="w-2 h-2 rounded-full bg-pba-cyan"></span> Prácticas valorizadas activas
-                            </div>
-                        </div>
-
+                    <div class="space-y-1 mb-8">
+                        <h1 class="text-2xl font-pba font-extrabold text-slate-800 tracking-tight">
+                            Portal SAMO
+                        </h1>
+                        <p class="text-[10px] font-black uppercase tracking-[0.2em] text-pba-cyan">
+                            HIGA Gral. San Martín <span class="text-slate-300 px-1">|</span> La Plata
+                        </p>
                     </div>
+
+                    <div class="max-w-xs mx-auto border-t border-slate-50 pt-8">
+                        <p class="text-slate-500 text-sm leading-relaxed font-medium">
+                            Bienvenido al sistema. Use el menú superior para acceder a los módulos de su área.
+                        </p>
+                    </div>
+
                 </div>
             </div>
+
+            <!-- Footer Institucional con Créditos Solicitados -->
+            <div class="mt-8 text-center">
+                <div class="flex items-center justify-center gap-3 text-[9px] font-bold uppercase tracking-widest text-slate-400 mb-6">
+                    <span class="bg-slate-200 px-2 py-0.5 rounded text-slate-500">v1.0 Beta</span>
+                    <span class="opacity-30">|</span>
+                    <span>{{ Auth::user()->name }}</span>
+                    <span class="opacity-30">|</span>
+                    <span>{{ now()->format('d/m/Y') }}</span>
+                </div>
+
+                <div class="pt-6 border-t border-slate-200">
+                    <p class="text-slate-500 text-[10px] font-bold uppercase tracking-[0.15em]">
+                        Desarrollado por la <span class="text-slate-800">División de Salud Digital</span>
+                    </p>
+                    <p class="text-slate-400 text-[9px] font-medium uppercase mt-1">
+                        HIGA General San Martín
+                    </p>
+                </div>
+            </div>
+
         </div>
     </div>
 </x-app-layout>

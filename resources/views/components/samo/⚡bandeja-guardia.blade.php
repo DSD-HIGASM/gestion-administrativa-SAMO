@@ -5,6 +5,7 @@ use Livewire\WithPagination;
 use App\Models\SamoTramite;
 use App\Models\SamoEstado;
 use App\Models\User;
+use App\Models\Exclusion; // <-- Importamos las Reglas de Jefatura
 use Illuminate\Support\Facades\Auth;
 
 new class extends Component {
@@ -21,6 +22,7 @@ new class extends Component {
     // Filtros
     public $search = '';
     public $filtroEstado = '';
+    public $mostrarOcultos = false; // <-- Switch de Jefatura
 
     // Variables para la Distribución Equitativa Selectiva
     public $facturistasParaDistribucion = [];
@@ -70,6 +72,7 @@ new class extends Component {
 
     public function updatingSearch() { $this->resetPage(); $this->resetSeleccion(); }
     public function updatingFiltroEstado() { $this->resetPage(); $this->resetSeleccion(); }
+    public function updatingMostrarOcultos() { $this->resetPage(); $this->resetSeleccion(); }
 
     public function updatedSeleccionarPagina($value)
     {
@@ -96,6 +99,30 @@ new class extends Component {
             $query->where('asignado_a_usuario_ulid', Auth::id());
         }
 
+        // --- REGLAS DE JEFATURA (OCULTAMIENTO MÁGICO) ---
+        // Si el switch está apagado (comportamiento normal), escondemos lo excluido
+        if (!$this->mostrarOcultos) {
+            // Buscamos todas las reglas activas
+            $reglas = Exclusion::where('activa', true)->get();
+
+            $serviciosOcultos = $reglas->where('tipo_exclusion', 'Servicio Guardia')->pluck('valor_exacto')->toArray();
+            $profesionalesOcultos = $reglas->where('tipo_exclusion', 'Profesional')->pluck('valor_exacto')->toArray();
+
+            // Si hay reglas de servicios de guardia, aplicamos un WhereNotIn a la relación
+            if (!empty($serviciosOcultos)) {
+                $query->whereHas('atencionGuardia', function($q) use ($serviciosOcultos) {
+                    $q->whereNotIn('servicio', $serviciosOcultos);
+                });
+            }
+
+            // Si hay reglas de profesionales, aplicamos un WhereNotIn
+            if (!empty($profesionalesOcultos)) {
+                $query->whereHas('atencionGuardia', function($q) use ($profesionalesOcultos) {
+                    $q->whereNotIn('profesional', $profesionalesOcultos);
+                });
+            }
+        }
+
         // 1. FILTRO DE TEXTO (DNI, Código, Nombre)
         if (!empty($this->search)) {
             $query->where(function($q) {
@@ -110,11 +137,8 @@ new class extends Component {
 
         // 2. FILTRO DE ESTADOS Y LÓGICA DE "DESAPARICIÓN"
         if (!empty($this->filtroEstado)) {
-            // Si el usuario elige un estado específico en el selector, mostramos esos expedientes (sean finales o no).
             $query->where('estado_ulid', $this->filtroEstado);
         } elseif (empty($this->search)) {
-            // COMPORTAMIENTO POR DEFECTO: Si la bandeja carga normal (sin búsquedas ni filtros),
-            // ocultamos automáticamente todos los expedientes que tengan un estado final.
             $query->whereHas('estado', function($q) {
                 $q->where('es_estado_final', false);
             });
@@ -141,7 +165,6 @@ new class extends Component {
         SamoTramite::whereIn('ulid', $this->seleccionados)
             ->update(['asignado_a_usuario_ulid' => $this->facturistaAsignar]);
 
-        // Buscamos el nombre del facturista para darle feedback exacto al Jefe
         $facturista = collect($this->facturistas)->firstWhere('ulid', $this->facturistaAsignar);
         $nombreFacturista = $facturista ? "{$facturista->name} {$facturista->lastname}" : 'el facturista';
 
@@ -153,11 +176,29 @@ new class extends Component {
 
     public function distribuirEquitativamente()
     {
-        $tramitesLibres = SamoTramite::whereNotNull('atencion_guardia_ulid')
+        // Al distribuir automáticamente, NUNCA tocamos lo que está oculto por Jefatura
+        $reglas = Exclusion::where('activa', true)->get();
+        $serviciosOcultos = $reglas->where('tipo_exclusion', 'Servicio Guardia')->pluck('valor_exacto')->toArray();
+        $profesionalesOcultos = $reglas->where('tipo_exclusion', 'Profesional')->pluck('valor_exacto')->toArray();
+
+        $query = SamoTramite::whereNotNull('atencion_guardia_ulid')
             ->whereNull('asignado_a_usuario_ulid')
             ->whereHas('estado', function($q) {
                 $q->where('es_estado_inicial', true);
-            })->get();
+            });
+
+        if (!empty($serviciosOcultos)) {
+            $query->whereHas('atencionGuardia', function($q) use ($serviciosOcultos) {
+                $q->whereNotIn('servicio', $serviciosOcultos);
+            });
+        }
+        if (!empty($profesionalesOcultos)) {
+            $query->whereHas('atencionGuardia', function($q) use ($profesionalesOcultos) {
+                $q->whereNotIn('profesional', $profesionalesOcultos);
+            });
+        }
+
+        $tramitesLibres = $query->get();
 
         if ($tramitesLibres->isEmpty()) {
             session()->flash('warning', 'No hay expedientes pendientes para distribuir.');
@@ -180,7 +221,7 @@ new class extends Component {
         }
 
         $this->resetSeleccion();
-        session()->flash('success', "¡Distribución Automática Exitosa! Se repartieron {$cantidad} expedientes entre " . $totalFacturistas . " facturistas activos.");
+        session()->flash('success', "¡Distribución Automática Exitosa! Se repartieron {$cantidad} expedientes limpios entre " . $totalFacturistas . " facturistas activos.");
     }
 
     public function with(): array
@@ -295,16 +336,26 @@ new class extends Component {
         </div>
     @endcanany
 
-    <div class="bg-white border border-gray-200 rounded-t-2xl shadow-sm p-4 flex flex-col sm:flex-row items-center justify-between gap-4 border-b-0">
-        <div class="relative w-full sm:w-96">
+    <div class="bg-white border border-gray-200 rounded-t-2xl shadow-sm p-4 flex flex-col md:flex-row items-center justify-between gap-4 border-b-0">
+        <div class="relative w-full md:w-96">
             <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                 <svg class="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
             </div>
             <input wire:model.live.debounce.300ms="search" type="text" placeholder="Buscar por DNI, Apellido o Código..." class="pl-10 w-full rounded-xl border-gray-200 bg-gray-50 focus:bg-white focus:border-pba-cyan focus:ring focus:ring-pba-cyan/20 font-sans text-sm text-gray-800 transition-colors shadow-inner">
         </div>
 
-        <div class="w-full sm:w-auto">
-            <select wire:model.live="filtroEstado" class="w-full rounded-xl border-gray-200 bg-gray-50 focus:bg-white focus:border-pba-cyan focus:ring focus:ring-pba-cyan/20 font-sans text-sm text-gray-800 transition-colors shadow-inner">
+        <div class="flex w-full md:w-auto items-center gap-4">
+            <!-- SWITCH MOSTRAR OCULTOS DE JEFATURA -->
+            @canany(['ver-gestion-guardia', 'dev'])
+                <div class="flex items-center gap-2 bg-yellow-50 px-3 py-2 rounded-xl border border-yellow-200">
+                    <label for="switchOcultos" class="text-[10px] font-bold text-yellow-800 uppercase cursor-pointer">Ver Ocultos</label>
+                    <button wire:click="$toggle('mostrarOcultos')" id="switchOcultos" type="button" class="relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none {{ $mostrarOcultos ? 'bg-yellow-500' : 'bg-gray-300' }}">
+                        <span class="pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow transition duration-200 ease-in-out {{ $mostrarOcultos ? 'translate-x-4' : 'translate-x-0' }}"></span>
+                    </button>
+                </div>
+            @endcanany
+
+            <select wire:model.live="filtroEstado" class="w-full md:w-auto rounded-xl border-gray-200 bg-gray-50 focus:bg-white focus:border-pba-cyan focus:ring focus:ring-pba-cyan/20 font-sans text-sm text-gray-800 transition-colors shadow-inner">
                 <option value="">Todos los Estados</option>
                 @foreach($estadosDisponibles as $estado)
                     <option value="{{ $estado->ulid }}">{{ $estado->nombre }}</option>

@@ -6,25 +6,20 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    /**
-     * Run the migrations.
-     */
     public function up(): void
     {
-        Schema::create('config', function (Blueprint $table) {
+        Schema::create('configuraciones', function (Blueprint $table) {
             $table->ulid('ulid')->primary();
-            $table->string('clave')->unique();
-            $table->text('valor')->nullable();
+            $table->string('clave')->unique(); // Ej: "FECHA_MAESTRA_PAMI"
+            $table->text('valor')->nullable(); // Ej: "2026-12-31"
             $table->string('descripcion')->nullable();
+            $table->string('tipo_dato')->default('string'); // 'string', 'boolean', 'json', 'date'
             $table->timestamps();
         });
     }
 
-    /**
-     * Reverse the migrations.
-     */
     public function down(): void
     {
-        Schema::dropIfExists('configuracions');
+        Schema::dropIfExists('configuraciones');
     }
 };
